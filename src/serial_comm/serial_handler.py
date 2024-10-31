@@ -20,6 +20,7 @@ class SerialHandler(QObject):
     def open(self, port=None):
         """Abre la conexión serial"""
         print(f"nos estamos conectando a {port}")
+        print(f"el puerto definido actualemtne es {self.port}")
         if port:
             self.port = port
             
