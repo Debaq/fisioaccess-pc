@@ -94,12 +94,12 @@ class GraphHandler(QWidget):
             # Actualizar Flujo vs Tiempo
             self.flow_time_curve.setData(
                 x=self.data['t'],
-                y=self.data['f']
+                y=self.data['v']
             )
             
             # Actualizar Flujo vs Presión
             self.flow_pressure_curve.setData(
-                x=self.data['p'],
+                x=self.data['v'],
                 y=self.data['f']
             )
             
