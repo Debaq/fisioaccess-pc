@@ -2,7 +2,9 @@ from PySide6.QtWidgets import QMainWindow
 from PySide6.QtCore import QTimer, Slot
 import serial.tools.list_ports
 from .main_window import Ui_Main
-from serial_comm.serial_handler import SerialHandler  # Asumiendo que cambiaste el nombre de la carpeta
+from serial_comm.serial_handler import SerialHandler  
+from serial_comm.SerialDataHandler import SerialDataHandler
+from utils.GraphHandler import GraphHandler
 
 class MainWindow(QMainWindow, Ui_Main):
     def __init__(self):
@@ -11,7 +13,13 @@ class MainWindow(QMainWindow, Ui_Main):
         
         # Inicializar el manejador serial
         self.serial_handler = SerialHandler()
-        
+        self.data_handler = SerialDataHandler()
+ 
+        # Inicializar los gráficos
+        self.graph_handler = GraphHandler()
+        self.horizontalLayout_2.addWidget(self.graph_handler)
+
+
         # Configurar el timer para actualizar la lista de puertos
         self.port_timer = QTimer()
         self.port_timer.timeout.connect(self.update_port_list)
@@ -33,6 +41,13 @@ class MainWindow(QMainWindow, Ui_Main):
         
         # Conectar el cambio de selección del combo box
         self.serial_list.currentIndexChanged.connect(self.port_selected)
+
+        # Conectar el manejador de datos con los gráficos
+        self.data_handler.new_data.connect(self.graph_handler.update_data)
+        
+        # Conectar el manejador serial con el procesamiento de datos
+        if hasattr(self.serial_handler, 'data_received'):
+            self.serial_handler.data_received.connect(self.data_handler.analisis_input_serial)
     
     @Slot()
     def update_port_list(self):
@@ -88,7 +103,7 @@ class MainWindow(QMainWindow, Ui_Main):
                 
                 # Configurar y abrir el puerto
                 self.serial_handler = SerialHandler(port=port)
-                if self.serial_handler.connect():
+                if self.serial_handler.open():
                     # Conexión exitosa
                     self.statusbar.showMessage(f"Conectado a {port}")
                     # Deshabilitar combo box mientras está conectado
@@ -111,6 +126,10 @@ class MainWindow(QMainWindow, Ui_Main):
                 self.serial_list.setEnabled(True)
             except Exception as e:
                 self.statusbar.showMessage(f"Error al desconectar: {str(e)}")
+    @Slot()
+    def clear_plots(self):
+        """Limpiar los gráficos"""
+        self.graph_handler.clear_data()
     
     def closeEvent(self, event):
         """Manejar el cierre de la ventana"""
