@@ -45,6 +45,10 @@ class MainWindow(QMainWindow, Ui_Main):
         # Conectar el manejador de datos con los gráficos
         self.data_handler.new_data.connect(self.graph_handler.update_data)
         
+        # Conectar el boton iniciar al thread para que lea los datos
+        self.btn_start.setEnabled(False)
+        self.btn_start.clicked.connect(self.serial_handler.start_reading)
+
         # Conectar el manejador serial con el procesamiento de datos
         if hasattr(self.serial_handler, 'data_received'):
             self.serial_handler.data_received.connect(self.data_handler.analisis_input_serial)
@@ -109,6 +113,7 @@ class MainWindow(QMainWindow, Ui_Main):
                     # Deshabilitar combo box mientras está conectado
                     self.serial_list.setEnabled(False)
                     self.btn_connect.setText("Desconectar")
+                    self.btn_start.setEnabled(True)
                 else:
                     raise Exception("No se pudo conectar al puerto")
                     
