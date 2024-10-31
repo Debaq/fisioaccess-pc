@@ -108,6 +108,7 @@ class MainWindow(QMainWindow, Ui_Main):
                     self.statusbar.showMessage(f"Conectado a {port}")
                     # Deshabilitar combo box mientras está conectado
                     self.serial_list.setEnabled(False)
+                    self.btn_connect.setText("Desconectar")
                 else:
                     raise Exception("No se pudo conectar al puerto")
                     
@@ -120,10 +121,12 @@ class MainWindow(QMainWindow, Ui_Main):
             # Desconectar
             try:
                 if self.serial_handler:
-                    self.serial_handler.disconnect()
+                    self.serial_handler.close()
                 self.statusbar.showMessage("Desconectado")
                 # Habilitar combo box después de desconectar
                 self.serial_list.setEnabled(True)
+                self.btn_connect.setText("Conectar")
+
             except Exception as e:
                 self.statusbar.showMessage(f"Error al desconectar: {str(e)}")
     @Slot()
