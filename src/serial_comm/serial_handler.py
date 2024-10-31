@@ -19,6 +19,7 @@ class SerialHandler(QObject):
         
     def open(self, port=None):
         """Abre la conexión serial"""
+        print(f"nos estamos conectando a {port}")
         if port:
             self.port = port
             
@@ -36,6 +37,8 @@ class SerialHandler(QObject):
                 baudrate=self.baudrate,
                 timeout=1
             )
+            print(f"nos conectamos a {port}")
+
         except serial.SerialException as e:
             raise Exception(f"Error al abrir puerto {self.port}: {str(e)}")
             
