@@ -2,7 +2,7 @@ from PySide6.QtWidgets import QMainWindow
 from PySide6.QtCore import Slot
 import pyqtgraph as pg
 from .main_window import Ui_Main
-from serial.serial_handler import SerialHandler  # Asumiendo que crearás esta clase
+from serial_comm.serial_handler import SerialHandler  # Asumiendo que crearás esta clase
 
 class MainWindow(QMainWindow, Ui_Main):
     def __init__(self):
