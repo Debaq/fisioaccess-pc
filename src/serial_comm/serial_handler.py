@@ -17,21 +17,9 @@ class SerialHandler(QObject):
         """Obtiene lista de puertos disponibles"""
         return [port.device for port in serial.tools.list_ports.comports()]
         
-    def open(self, port=None):
+    def open(self):
         """Abre la conexión serial"""
-        print(f"nos estamos conectando a {port}")
-        print(f"el puerto definido actualemtne es {self.port}")
-        if port:
-            self.port = port
-            
-        if self.port is None:
-            # Si no se especifica puerto, intentar con el primero disponible
-            available_ports = self.get_available_ports()
-            if available_ports:
-                self.port = available_ports[0]
-            else:
-                raise Exception("No hay puertos seriales disponibles")
-                
+               
         try:
             self.serial = serial.Serial(
                 port=self.port,
