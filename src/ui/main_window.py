@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'mainRXRbvq.ui'
+## Form generated from reading UI file 'mainfKBqGA.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.7.2
 ##
@@ -75,10 +75,6 @@ class Ui_Main(object):
         self.btn_connect.setCheckable(True)
 
         self.horizontalLayout.addWidget(self.btn_connect)
-
-        self.horizontalSpacer_2 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-
-        self.horizontalLayout.addItem(self.horizontalSpacer_2)
 
 
         self.verticalLayout.addWidget(self.horizontalFrame)

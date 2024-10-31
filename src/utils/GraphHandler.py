@@ -28,30 +28,29 @@ class GraphHandler(QWidget):
         
     def setup_graphs(self):
         """Configurar los widgets de gráficos"""
-        # Crear layout para los gráficos
-        graph_layout = pg.GraphicsLayoutWidget()
+        # Crear dos widgets de gráficos separados
+        self.flow_time_widget = pg.PlotWidget()
+        self.flow_pressure_widget = pg.PlotWidget()
         
-        # Gráfico Flujo vs Tiempo (2/3 del ancho)
-        self.flow_time_plot = graph_layout.addPlot()
+        # Configurar el gráfico Flujo vs Tiempo
+        self.flow_time_plot = self.flow_time_widget.getPlotItem()
         self.flow_time_plot.setLabel('left', 'Flujo', 'L/s')
         self.flow_time_plot.setLabel('bottom', 'Tiempo', 's')
         self.flow_time_plot.showGrid(x=True, y=True)
         
-        # Agregar algo de espacio entre los gráficos
-        graph_layout.nextColumn()
-        
-        # Gráfico Flujo vs Presión (1/3 del ancho)
-        self.flow_pressure_plot = graph_layout.addPlot()
+        # Configurar el gráfico Flujo vs Presión
+        self.flow_pressure_plot = self.flow_pressure_widget.getPlotItem()
         self.flow_pressure_plot.setLabel('left', 'Flujo', 'L/s')
         self.flow_pressure_plot.setLabel('bottom', 'Presión', 'Kpa')
         self.flow_pressure_plot.showGrid(x=True, y=True)
         
-        # Configurar las proporciones de los gráficos (2:1)
-        graph_layout.ci.layout.setColumnStretchFactor(0, 2)
-        graph_layout.ci.layout.setColumnStretchFactor(1, 1)
+        # Configurar el fondo de los gráficos
+        self.flow_time_widget.setBackground('w')
+        self.flow_pressure_widget.setBackground('w')
         
-        # Agregar el layout de gráficos al layout principal
-        self.layout.addWidget(graph_layout)
+        # Agregar los widgets al layout con la proporción correcta
+        self.layout.addWidget(self.flow_time_widget, stretch=2)
+        self.layout.addWidget(self.flow_pressure_widget, stretch=1)
         
     def setup_curve_styles(self):
         """Configurar las curvas de los gráficos"""
@@ -64,6 +63,13 @@ class GraphHandler(QWidget):
         self.flow_pressure_curve = self.flow_pressure_plot.plot(
             pen=pg.mkPen('r', width=2)
         )
+        
+        # Configurar el color de las etiquetas y ejes para que sean visibles con fondo blanco
+        for plot in [self.flow_time_plot, self.flow_pressure_plot]:
+            plot.getAxis('bottom').setPen('k')
+            plot.getAxis('left').setPen('k')
+            plot.getAxis('bottom').setTextPen('k')
+            plot.getAxis('left').setTextPen('k')
         
     @Slot(dict)
     def update_data(self, new_data):
