@@ -116,7 +116,7 @@
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_4">
          <item>
-          <widget class="QPushButton" name="pushButton_2">
+          <widget class="QPushButton" name="btn_start">
            <property name="text">
             <string>Iniciar</string>
            </property>
