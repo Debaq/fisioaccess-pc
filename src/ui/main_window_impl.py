@@ -53,7 +53,7 @@ class MainWindow(QMainWindow, Ui_Main):
     def update_port_list(self):
         """Actualizar la lista de puertos seriales disponibles"""
         # Obtener puertos actuales
-        ports = [port.device for port in serial.tools.list_ports.comports()]
+        ports = self.serial_handler.get_available_ports()
         
         # Si la lista es diferente a la anterior, actualizar el combo box
         if ports != self.available_ports:
