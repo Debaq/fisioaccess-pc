@@ -1,6 +1,8 @@
 from PySide6.QtCore import QObject, Signal, QThread
 import serial
 import serial.tools.list_ports
+import re
+
 
 class SerialHandler(QObject):
     data_received = Signal(list)  # Señal para enviar datos a la interfaz
@@ -13,9 +15,13 @@ class SerialHandler(QObject):
         self.baudrate = baudrate
         self.read_thread = None
         
+
     def get_available_ports(self):
-        """Obtiene lista de puertos disponibles"""
-        return [port.device for port in serial.tools.list_ports.comports()]
+        """Obtiene lista de puertos disponibles que terminan en ACM seguido de un número"""
+        all_ports = [port.device for port in serial.tools.list_ports.comports()]
+        # Filtra usando regex para encontrar puertos que terminan en ACM seguido de cualquier número
+        acm_ports = [port for port in all_ports if re.search(r'ACM\d+$', port)]
+        return acm_ports
         
     def open(self):
         """Abre la conexión serial"""
