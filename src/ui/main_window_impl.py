@@ -1,8 +1,8 @@
 from PySide6.QtWidgets import QMainWindow
-from PySide6.QtCore import Slot
-import pyqtgraph as pg
+from PySide6.QtCore import QTimer, Slot
+import serial.tools.list_ports
 from .main_window import Ui_Main
-from serial_comm.serial_handler import SerialHandler  # Asumiendo que crearás esta clase
+from serial_comm.serial_handler import SerialHandler  # Asumiendo que cambiaste el nombre de la carpeta
 
 class MainWindow(QMainWindow, Ui_Main):
     def __init__(self):
@@ -10,96 +10,116 @@ class MainWindow(QMainWindow, Ui_Main):
         self.setupUi(self)
         
         # Inicializar el manejador serial
-        self.serial_handler = None
+        self.serial_handler = SerialHandler()
         
-        # Configurar el gráfico
-        self.setup_plot()
+        # Configurar el timer para actualizar la lista de puertos
+        self.port_timer = QTimer()
+        self.port_timer.timeout.connect(self.update_port_list)
+        self.port_timer.start(1000)  # Actualizar cada segundo
+        
+        # Lista para mantener track de los puertos disponibles
+        self.available_ports = []
         
         # Conectar señales
         self.connect_signals()
         
-        # Variables de estado
-        self.is_recording = False
-        self.current_mode = None  # 'espirometria', 'ecg', o 'emg'
-        
-    def setup_plot(self):
-        """Configura el área de gráfico PyQtGraph"""
-        self.plot_widget = pg.PlotWidget()
-        self.horizontalLayout_2.addWidget(self.plot_widget)
-        
-        # Configurar el estilo del gráfico
-        self.plot_widget.setBackground('white')
-        self.plot_widget.showGrid(x=True, y=True)
-        self.plot_curve = self.plot_widget.plot(pen='b')
+        # Actualizar lista inicial de puertos
+        self.update_port_list()
         
     def connect_signals(self):
-        """Conecta todos los botones y acciones con sus slots"""
-        # Conectar acciones del menú
-        self.actionEspirometria.triggered.connect(lambda: self.change_mode('espirometria'))
-        self.actionECG.triggered.connect(lambda: self.change_mode('ecg'))
-        self.actionEOG.triggered.connect(lambda: self.change_mode('emg'))
+        """Conectar todas las señales necesarias"""
+        # Conectar el botón de conexión
+        self.btn_connect.clicked.connect(self.handle_connection)
         
-        # Conectar botones
-        self.pushButton.clicked.connect(self.open_port)
-        self.pushButton_2.clicked.connect(self.toggle_recording)
-        self.pushButton_3.clicked.connect(self.clear_data)
-        self.pushButton_4.clicked.connect(self.reset_view)
-        self.pushButton_5.clicked.connect(self.save_data)
-        
+        # Conectar el cambio de selección del combo box
+        self.serial_list.currentIndexChanged.connect(self.port_selected)
+    
     @Slot()
-    def change_mode(self, mode):
-        """Cambia el modo de medición"""
-        self.current_mode = mode
-        # Aquí puedes agregar configuración específica para cada modo
-        self.statusbar.showMessage(f"Modo: {mode.upper()}")
+    def update_port_list(self):
+        """Actualizar la lista de puertos seriales disponibles"""
+        # Obtener puertos actuales
+        ports = [port.device for port in serial.tools.list_ports.comports()]
         
-    @Slot()
-    def open_port(self):
-        """Abre el puerto serial"""
-        try:
-            if self.serial_handler is None:
-                self.serial_handler = SerialHandler()
-                self.serial_handler.data_received.connect(self.update_plot)
-                self.pushButton.setText("Cerrar")
-            else:
-                self.serial_handler.close()
-                self.serial_handler = None
-                self.pushButton.setText("Abrir")
-        except Exception as e:
-            self.statusbar.showMessage(f"Error: {str(e)}")
+        # Si la lista es diferente a la anterior, actualizar el combo box
+        if ports != self.available_ports:
+            # Guardar el puerto seleccionado actualmente
+            current_port = self.serial_list.currentText()
             
-    @Slot()
-    def toggle_recording(self):
-        """Inicia o detiene la grabación"""
-        self.is_recording = not self.is_recording
-        button_text = "Detener" if self.is_recording else "Iniciar"
-        self.pushButton_2.setText(button_text)
+            # Actualizar la lista de puertos
+            self.serial_list.clear()
+            self.serial_list.addItems(ports)
+            
+            # Intentar mantener el puerto seleccionado si aún existe
+            if current_port in ports:
+                self.serial_list.setCurrentText(current_port)
+            
+            # Actualizar la lista de puertos disponibles
+            self.available_ports = ports
+            
+            # Deshabilitar el botón de conexión si no hay puertos
+            self.btn_connect.setEnabled(len(ports) > 0)
+            
+            # Si no hay puertos y estaba conectado, desconectar
+            if not ports and self.btn_connect.isChecked():
+                self.btn_connect.setChecked(False)
+                self.handle_connection()
+    
+    @Slot(int)
+    def port_selected(self, index):
+        """Manejar la selección de un puerto en el combo box"""
+        # Si hay un puerto seleccionado, habilitar el botón de conexión
+        self.btn_connect.setEnabled(index >= 0)
         
-        if self.serial_handler:
-            if self.is_recording:
-                self.serial_handler.start_reading()
-            else:
-                self.serial_handler.stop_reading()
+        # Si cambia el puerto y estaba conectado, desconectar
+        if self.btn_connect.isChecked():
+            self.btn_connect.setChecked(False)
+            self.handle_connection()
+    
+    @Slot()
+    def handle_connection(self):
+        """Manejar la conexión/desconexión del puerto serial"""
+        if self.btn_connect.isChecked():
+            # Intentar conectar
+            try:
+                # Obtener el puerto seleccionado
+                port = self.serial_list.currentText()
+                if not port:
+                    raise ValueError("No hay puerto seleccionado")
                 
-    @Slot()
-    def clear_data(self):
-        """Limpia los datos del gráfico"""
-        self.plot_curve.setData([], [])
+                # Configurar y abrir el puerto
+                self.serial_handler = SerialHandler(port=port)
+                if self.serial_handler.connect():
+                    # Conexión exitosa
+                    self.statusbar.showMessage(f"Conectado a {port}")
+                    # Deshabilitar combo box mientras está conectado
+                    self.serial_list.setEnabled(False)
+                else:
+                    raise Exception("No se pudo conectar al puerto")
+                    
+            except Exception as e:
+                # Si hay error, mostrar mensaje y desmarcar el botón
+                self.statusbar.showMessage(f"Error de conexión: {str(e)}")
+                self.btn_connect.setChecked(False)
+                self.serial_list.setEnabled(True)
+        else:
+            # Desconectar
+            try:
+                if self.serial_handler:
+                    self.serial_handler.disconnect()
+                self.statusbar.showMessage("Desconectado")
+                # Habilitar combo box después de desconectar
+                self.serial_list.setEnabled(True)
+            except Exception as e:
+                self.statusbar.showMessage(f"Error al desconectar: {str(e)}")
+    
+    def closeEvent(self, event):
+        """Manejar el cierre de la ventana"""
+        # Detener el timer
+        self.port_timer.stop()
         
-    @Slot()
-    def reset_view(self):
-        """Resetea la vista del gráfico"""
-        self.plot_widget.enableAutoRange()
-        
-    @Slot()
-    def save_data(self):
-        """Guarda los datos actuales"""
-        # Implementar la lógica de guardado
-        pass
-        
-    @Slot(list)
-    def update_plot(self, data):
-        """Actualiza el gráfico con nuevos datos"""
-        # Implementar la actualización del gráfico
-        # Este método será llamado cuando se reciban nuevos datos del puerto serial
-        pass
+        # Desconectar si es necesario
+        if self.btn_connect.isChecked():
+            self.serial_handler.disconnect()
+            
+        # Aceptar el evento de cierre
+        event.accept()

@@ -80,6 +80,16 @@
         <widget class="QComboBox" name="serial_list"/>
        </item>
        <item>
+        <widget class="QPushButton" name="btn_connect">
+         <property name="text">
+          <string>conectar</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
         <spacer name="horizontalSpacer_2">
          <property name="orientation">
           <enum>Qt::Orientation::Horizontal</enum>

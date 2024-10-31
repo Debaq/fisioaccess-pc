@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'mainmvquWQ.ui'
+## Form generated from reading UI file 'mainRXRbvq.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.7.2
 ##
@@ -16,9 +16,10 @@ from PySide6.QtGui import (QAction, QBrush, QColor, QConicalGradient,
     QIcon, QImage, QKeySequence, QLinearGradient,
     QPainter, QPalette, QPixmap, QRadialGradient,
     QTransform)
-from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QMainWindow,
-    QMenu, QMenuBar, QPushButton, QSizePolicy,
-    QSpacerItem, QStatusBar, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QHBoxLayout,
+    QMainWindow, QMenu, QMenuBar, QPushButton,
+    QSizePolicy, QSpacerItem, QStatusBar, QVBoxLayout,
+    QWidget)
 
 class Ui_Main(object):
     def setupUi(self, Main):
@@ -59,6 +60,21 @@ class Ui_Main(object):
 
 
         self.horizontalLayout.addLayout(self.layout_toolbar)
+
+        self.horizontalSpacer_4 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+        self.horizontalLayout.addItem(self.horizontalSpacer_4)
+
+        self.serial_list = QComboBox(self.horizontalFrame)
+        self.serial_list.setObjectName(u"serial_list")
+
+        self.horizontalLayout.addWidget(self.serial_list)
+
+        self.btn_connect = QPushButton(self.horizontalFrame)
+        self.btn_connect.setObjectName(u"btn_connect")
+        self.btn_connect.setCheckable(True)
+
+        self.horizontalLayout.addWidget(self.btn_connect)
 
         self.horizontalSpacer_2 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
@@ -146,6 +162,7 @@ class Ui_Main(object):
         self.actionECG.setText(QCoreApplication.translate("Main", u"ECG", None))
         self.actionEOG.setText(QCoreApplication.translate("Main", u"EMG", None))
         self.pushButton.setText(QCoreApplication.translate("Main", u"Abrir", None))
+        self.btn_connect.setText(QCoreApplication.translate("Main", u"conectar", None))
         self.pushButton_2.setText(QCoreApplication.translate("Main", u"Iniciar", None))
         self.pushButton_3.setText(QCoreApplication.translate("Main", u"Borrar", None))
         self.pushButton_4.setText(QCoreApplication.translate("Main", u"Reset", None))
