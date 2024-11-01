@@ -49,7 +49,7 @@ class SerialReaderThread(QThread):
 
 
 class SerialHandler(QObject):
-    data_received = Signal(str)
+    data_received_serial = Signal(str)
 
     def __init__(self, port=None, baudrate=115200):
         super().__init__()
@@ -117,7 +117,7 @@ class SerialHandler(QObject):
     def handle_received_data(self, data):
         """Método intermedio para debug de señales"""
         print(f"Datos recibidos en SerialHandler: {data}")
-        self.data_received.emit(data)
+        self.data_received_serial.emit(data)
     
     def stop_reading(self):
         if self.reader_thread:
