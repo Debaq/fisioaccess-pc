@@ -36,33 +36,40 @@ class MainWindow(QMainWindow, Ui_Main):
         
     def connect_signals(self):
         """Conectar todas las señales necesarias"""
-        # Conectar el botón de conexión
+        # Debug prints para verificar conexiones
+        print("Conectando señales en MainWindow...")
+        
         self.btn_connect.clicked.connect(self.handle_connection)
+        print("Botón de conexión conectado")
         
-        # Conectar el cambio de selección del combo box
         self.serial_list.currentIndexChanged.connect(self.port_selected)
+        print("Combo box conectado")
 
-        #conectar entrada serial al handler
+        # Conectar el manejador serial con debug
+        print("Conectando señal de datos recibidos...")
         self.serial_handler.data_received.connect(self.print_info)
+        print("Señal de datos conectada")
 
-        # Conectar el manejador de datos con los gráficos
         self.data_handler.new_data.connect(self.graph_handler.update_data)
+        print("Handler de datos conectado")
         
-        # Conectar el boton iniciar al thread para que lea los datos
         self.btn_start.setEnabled(False)
         self.btn_start.clicked.connect(self.start_read)
-
-        # Conectar el manejador serial con el procesamiento de datos
-        #if hasattr(self.serial_handler, 'data_received'):
-        self.serial_handler.data_received.connect(self.data_handler.analisis_input_serial)
+        print("Botón de inicio conectado")
     
     @Slot()
     def start_read(self):
-        print(self.serial_handler.start_reading())
+        print("Iniciando lectura...")
+        result = self.serial_handler.start_reading()
+        print(f"Resultado de inicio de lectura: {result}")
+        if self.serial_handler.reader_thread and self.serial_handler.reader_thread.isRunning():
+            print("Thread está activo")
+        else:
+            print("Thread no está activo")
 
     @Slot()
     def print_info(self, data):
-        print(f"estamos recibiendo lo siguiente: {data}")
+        print(f"MainWindow recibió datos: {data}")
 
     @Slot()
     def update_port_list(self):
