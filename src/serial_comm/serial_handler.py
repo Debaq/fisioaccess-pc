@@ -61,7 +61,10 @@ class SerialHandler(QObject):
         if self.read_thread:
             self.read_thread.quit()
             self.read_thread.wait()
-            
+    
+    def read_line(self):
+        return self.serial.readline()
+
     def _read_loop(self):
         """Loop principal de lectura"""
         while self.is_reading:
