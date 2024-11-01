@@ -69,7 +69,6 @@ class SerialHandler(QObject):
                     data = self.serial.readline().decode().strip()
                     # Aquí procesas los datos según tu protocolo
                     # y emites la señal data_received
-                    print(data)
                     self.data_received.emit([float(data)])
                 except Exception as e:
                     print(f"Error leyendo datos: {str(e)}")

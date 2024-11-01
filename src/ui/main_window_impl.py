@@ -42,6 +42,9 @@ class MainWindow(QMainWindow, Ui_Main):
         # Conectar el cambio de selección del combo box
         self.serial_list.currentIndexChanged.connect(self.port_selected)
 
+        #conectar entrada serial al handler
+        self.serial_handler.data_received.connect(self.data_handler.analisis_input_serial)
+
         # Conectar el manejador de datos con los gráficos
         self.data_handler.new_data.connect(self.graph_handler.update_data)
         
