@@ -37,7 +37,8 @@ class MainWindow(QMainWindow, Ui_Main):
     def connect_signals(self):
         """Conectar todas las señales necesarias"""
 
-        self.btn_clear.clicked.connect(self.graph_handler.clear_data)
+        self.btn_clear.clicked.connect(self.clear_data)
+        self.btn_reset.clicked.connect(self.reset_data)
 
         # Conectar el botón de conexión
         self.btn_connect.clicked.connect(self.handle_connection)
@@ -170,10 +171,22 @@ class MainWindow(QMainWindow, Ui_Main):
     
  
     @Slot()
-    def clear_plots(self):
+    def clear_data(self):
+        """Limpiar el puerto serial"""
+        self.serial_handler.write_data("v")
+
         """Limpiar los gráficos"""
         self.graph_handler.clear_data()
     
+    @Slot()
+    def reset_data(self):
+        """resetear la placa"""
+        self.serial_handler.write_data("r")
+
+        """Limpiar los gráficos"""
+        self.graph_handler.clear_data()
+    
+
     def closeEvent(self, event):
         """Manejar el cierre de la ventana"""
         # Detener el timer

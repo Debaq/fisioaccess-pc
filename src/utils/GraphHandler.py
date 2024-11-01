@@ -103,6 +103,7 @@ class GraphHandler(QWidget):
                 y=self.data['f']
             )
             
+    
     def clear_data(self):
         """Limpiar todos los datos"""
         for key in self.data:

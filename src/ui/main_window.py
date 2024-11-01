@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'mainmAIqrp.ui'
+## Form generated from reading UI file 'mainzjOwAj.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.7.2
 ##
@@ -103,10 +103,10 @@ class Ui_Main(object):
 
         self.horizontalLayout_4.addWidget(self.btn_clear)
 
-        self.pushButton_4 = QPushButton(self.horizontalFrame_3)
-        self.pushButton_4.setObjectName(u"pushButton_4")
+        self.btn_reset = QPushButton(self.horizontalFrame_3)
+        self.btn_reset.setObjectName(u"btn_reset")
 
-        self.horizontalLayout_4.addWidget(self.pushButton_4)
+        self.horizontalLayout_4.addWidget(self.btn_reset)
 
         self.horizontalSpacer_3 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
@@ -161,7 +161,7 @@ class Ui_Main(object):
         self.btn_connect.setText(QCoreApplication.translate("Main", u"conectar", None))
         self.btn_start.setText(QCoreApplication.translate("Main", u"Iniciar", None))
         self.btn_clear.setText(QCoreApplication.translate("Main", u"Borrar", None))
-        self.pushButton_4.setText(QCoreApplication.translate("Main", u"Reset", None))
+        self.btn_reset.setText(QCoreApplication.translate("Main", u"Reset", None))
         self.pushButton_5.setText(QCoreApplication.translate("Main", u"Guardar", None))
         self.menuArchivo.setTitle(QCoreApplication.translate("Main", u"Archivo", None))
         self.menuNuevo.setTitle(QCoreApplication.translate("Main", u"Nuevo", None))

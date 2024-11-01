@@ -1,4 +1,4 @@
-from PySide6.QtCore import QObject, Signal, QThread, Slot
+from PySide6.QtCore import QObject, Signal, QThread, Slot, QMutex, QWaitCondition
 import serial
 import serial.tools.list_ports
 import re
@@ -8,45 +8,49 @@ import time
 class SerialReaderThread(QThread):
     data_received = Signal(str)
 
-    def __init__(self, serial_port):
+    def __init__(self, serial_port, mutex):
         super().__init__()
         self.serial_port = serial_port
+        self.mutex = mutex  # Compartir el mutex
         self.is_running = False
+        self.wait_condition = QWaitCondition()
 
     def run(self):
         self.is_running = True
-        #counter = 0  # Contador para debug
         
         while self.is_running and self.serial_port and self.serial_port.is_open:
             try:
-                # Debug print cada 100 iteraciones
-                counter += 1
-                #if counter % 100 == 0:
-                #    print(f"Thread running... Loop count: {counter}")
-                #    print(f"Serial port status - Is open: {self.serial_port.is_open}")
-                #    print(f"Bytes waiting: {self.serial_port.in_waiting}")
-                
+                # Usar un bloqueo con timeout para permitir escrituras
+                self.mutex.lock()
                 if self.serial_port.in_waiting:
                     data = self.serial_port.readline().decode().strip()
                     if data:
                         self.data_received.emit(data)
+                self.mutex.unlock()
+                
+                # Pequeña pausa para no saturar el CPU y dar oportunidad a la escritura
+                self.msleep(1)
                 
             except Exception as e:
+                if self.mutex.tryLock():
+                    self.mutex.unlock()
                 error_msg = f"Error en thread de lectura: {str(e)}"
-                print(error_msg)  # Debug print
+                print(error_msg)
                 self.data_received.emit(error_msg)
                 break
-                
 
     def stop(self):
-        print("Stopping thread...")  # Debug print
+        print("Stopping thread...")
         self.is_running = False
+        self.wait_condition.wakeAll()  # Despertar el thread si está esperando
         self.wait()
-        print("Thread stopped")  # Debug print
+        print("Thread stopped")
 
 
 class SerialHandler(QObject):
     data_received_serial = Signal(str)
+    write_status = Signal(str)
+    error_occurred = Signal(str)
 
     def __init__(self, port=None, baudrate=115200):
         super().__init__()
@@ -54,6 +58,8 @@ class SerialHandler(QObject):
         self.port = port
         self.baudrate = baudrate
         self.reader_thread = None
+        self.mutex = QMutex()  # Mutex para sincronización
+        self.write_timeout = 1000  # timeout en ms para escritura
 
     def get_available_ports(self):
         ports = [port.device for port in serial.tools.list_ports.comports()]
@@ -62,42 +68,38 @@ class SerialHandler(QObject):
         
     def open(self):
         try:
-            print(f"Intentando abrir puerto {self.port}")  # Debug print
+            print(f"Intentando abrir puerto {self.port}")
             self.serial = serial.Serial(
                 port=self.port,
                 baudrate=self.baudrate,
                 timeout=1
             )
-            print(f"Puerto abierto exitosamente: {self.serial.is_open}")  # Debug print
+            print(f"Puerto abierto exitosamente: {self.serial.is_open}")
             return True
         except serial.SerialException as e:
             error_msg = f"Error al abrir puerto {self.port}: {str(e)}"
-            print(error_msg)  # Debug print
+            self.error_occurred.emit(error_msg)
             raise Exception(error_msg)
             
     def close(self):
-        print("Cerrando conexión serial...")  # Debug print
+        print("Cerrando conexión serial...")
         self.stop_reading()
         if self.serial and self.serial.is_open:
             self.serial.close()
-            print("Conexión serial cerrada")  # Debug print
+            print("Conexión serial cerrada")
             
     def start_reading(self):
         if not self.serial or not self.serial.is_open:
             error_msg = "Puerto serial no está abierto"
-            print(error_msg)  # Debug print
+            self.error_occurred.emit(error_msg)
             raise Exception(error_msg)
             
         if self.reader_thread is None:
-            self.reader_thread = SerialReaderThread(self.serial)
-            
-            # Conectar señal con debug
+            self.reader_thread = SerialReaderThread(self.serial, self.mutex)
             self.reader_thread.data_received.connect(self.handle_received_data)
-            
             self.reader_thread.start()
             
-            # Verificar que el thread está corriendo
-            time.sleep(0.1)  # Pequeña pausa para que el thread inicie
+            time.sleep(0.1)
             if self.reader_thread.isRunning():
                 return "Lectura iniciada correctamente"
             else:
@@ -111,7 +113,73 @@ class SerialHandler(QObject):
     
     def stop_reading(self):
         if self.reader_thread:
-            print("Deteniendo thread de lectura...")  # Debug print
+            print("Deteniendo thread de lectura...")
             self.reader_thread.stop()
             self.reader_thread = None
-            print("Thread detenido y eliminado")  # Debug print
+            print("Thread detenido y eliminado")
+
+    def write_data(self, data, add_newline=True):
+        """
+        Envía datos por el puerto serial de manera thread-safe.
+        
+        Args:
+            data (str): Datos a enviar
+            add_newline (bool): Si True, agrega un salto de línea al final
+        
+        Returns:
+            bool: True si el envío fue exitoso, False en caso contrario
+        """
+        if not self.serial or not self.serial.is_open:
+            self.error_occurred.emit("Puerto serial no está abierto")
+            return False
+
+        try:
+            # Preparar los datos
+            if add_newline and not data.endswith('\n'):
+                data += '\n'
+            
+            data_bytes = data.encode()
+            return self.write_bytes(data_bytes)
+
+        except Exception as e:
+            error_msg = f"Error preparando datos: {str(e)}"
+            self.error_occurred.emit(error_msg)
+            return False
+
+    def write_bytes(self, data_bytes):
+        """
+        Envía bytes por el puerto serial de manera thread-safe.
+        
+        Args:
+            data_bytes (bytes): Datos en bytes a enviar
+        
+        Returns:
+            bool: True si el envío fue exitoso, False en caso contrario
+        """
+        if not self.serial or not self.serial.is_open:
+            self.error_occurred.emit("Puerto serial no está abierto")
+            return False
+
+        try:
+            # Intentar obtener el lock con timeout
+            if not self.mutex.tryLock(self.write_timeout):
+                self.error_occurred.emit("Timeout esperando para escribir")
+                return False
+
+            try:
+                # Escribir datos
+                bytes_written = self.serial.write(data_bytes)
+                self.serial.flush()
+                
+                # Emitir estado
+                self.write_status.emit(f"Enviados {bytes_written} bytes exitosamente")
+                return True
+
+            finally:
+                # Siempre liberar el mutex
+                self.mutex.unlock()
+
+        except Exception as e:
+            error_msg = f"Error escribiendo datos: {str(e)}"
+            self.error_occurred.emit(error_msg)
+            return False
