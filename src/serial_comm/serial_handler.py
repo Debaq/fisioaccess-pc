@@ -53,6 +53,7 @@ class SerialHandler(QObject):
         self.moveToThread(self.read_thread)
         self.read_thread.started.connect(self._read_loop)
         self.read_thread.start()
+        return "Estamos grabando no se que te pasa!"
         
     def stop_reading(self):
         """Detiene la lectura de datos"""

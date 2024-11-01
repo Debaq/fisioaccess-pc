@@ -50,12 +50,16 @@ class MainWindow(QMainWindow, Ui_Main):
         
         # Conectar el boton iniciar al thread para que lea los datos
         self.btn_start.setEnabled(False)
-        self.btn_start.clicked.connect(self.serial_handler.start_reading)
+        self.btn_start.clicked.connect(self.start_read)
 
         # Conectar el manejador serial con el procesamiento de datos
         if hasattr(self.serial_handler, 'data_received'):
             self.serial_handler.data_received.connect(self.data_handler.analisis_input_serial)
     
+    @Slot()
+    def start_read(self):
+        print(self.serial_handler.start_reading())
+
     @Slot()
     def print_info(self, data):
         print(f"estamos recibiendo lo siguiente: {data}")
