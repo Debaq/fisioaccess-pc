@@ -20,6 +20,12 @@ class SerialReaderThread(QThread):
                     data = self.serial_port.readline().decode().strip()
                     if data:
                         self.data_received.emit(data)
+                    else:
+                        data = f"pase el primer if pero no el segundo"
+                        self.data_received.emit(data)
+                else:
+                    data = f"no pase este if"
+                    self.data_received.emit(data)
             except Exception as e:
                 data = f"Error en thread de lectura: {str(e)}"
                 self.data_received.emit(data)
