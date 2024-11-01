@@ -42,7 +42,7 @@
        <item>
         <layout class="QHBoxLayout" name="layout_toolbar">
          <item>
-          <widget class="QPushButton" name="pushButton">
+          <widget class="QPushButton" name="btn_open">
            <property name="text">
             <string>Abrir</string>
            </property>
@@ -150,7 +150,7 @@
           </spacer>
          </item>
          <item>
-          <widget class="QPushButton" name="pushButton_5">
+          <widget class="QPushButton" name="btn_save">
            <property name="text">
             <string>Guardar</string>
            </property>

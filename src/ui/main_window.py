@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'mainzjOwAj.ui'
+## Form generated from reading UI file 'mainxiOpuU.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.7.2
 ##
@@ -45,10 +45,10 @@ class Ui_Main(object):
         self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
         self.layout_toolbar = QHBoxLayout()
         self.layout_toolbar.setObjectName(u"layout_toolbar")
-        self.pushButton = QPushButton(self.horizontalFrame)
-        self.pushButton.setObjectName(u"pushButton")
+        self.btn_open = QPushButton(self.horizontalFrame)
+        self.btn_open.setObjectName(u"btn_open")
 
-        self.layout_toolbar.addWidget(self.pushButton)
+        self.layout_toolbar.addWidget(self.btn_open)
 
         self.line = QFrame(self.horizontalFrame)
         self.line.setObjectName(u"line")
@@ -112,10 +112,10 @@ class Ui_Main(object):
 
         self.horizontalLayout_4.addItem(self.horizontalSpacer_3)
 
-        self.pushButton_5 = QPushButton(self.horizontalFrame_3)
-        self.pushButton_5.setObjectName(u"pushButton_5")
+        self.btn_save = QPushButton(self.horizontalFrame_3)
+        self.btn_save.setObjectName(u"btn_save")
 
-        self.horizontalLayout_4.addWidget(self.pushButton_5)
+        self.horizontalLayout_4.addWidget(self.btn_save)
 
 
         self.horizontalLayout_3.addLayout(self.horizontalLayout_4)
@@ -157,12 +157,12 @@ class Ui_Main(object):
         self.actionEspirometria.setText(QCoreApplication.translate("Main", u"Espirometria", None))
         self.actionECG.setText(QCoreApplication.translate("Main", u"ECG", None))
         self.actionEOG.setText(QCoreApplication.translate("Main", u"EMG", None))
-        self.pushButton.setText(QCoreApplication.translate("Main", u"Abrir", None))
+        self.btn_open.setText(QCoreApplication.translate("Main", u"Abrir", None))
         self.btn_connect.setText(QCoreApplication.translate("Main", u"conectar", None))
         self.btn_start.setText(QCoreApplication.translate("Main", u"Iniciar", None))
         self.btn_clear.setText(QCoreApplication.translate("Main", u"Borrar", None))
         self.btn_reset.setText(QCoreApplication.translate("Main", u"Reset", None))
-        self.pushButton_5.setText(QCoreApplication.translate("Main", u"Guardar", None))
+        self.btn_save.setText(QCoreApplication.translate("Main", u"Guardar", None))
         self.menuArchivo.setTitle(QCoreApplication.translate("Main", u"Archivo", None))
         self.menuNuevo.setTitle(QCoreApplication.translate("Main", u"Nuevo", None))
     # retranslateUi
