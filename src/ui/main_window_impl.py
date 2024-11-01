@@ -42,6 +42,8 @@ class MainWindow(QMainWindow, Ui_Main):
         print(f"Estado de serial_handler: {self.serial_handler}")
         print(f"serial_handler tiene señal data_received: {hasattr(self.serial_handler, 'data_received')}")
         
+        self.btn_clear.clicked.connect(self.graph_handler.clear_data)
+
         # Conectar el botón de conexión
         self.btn_connect.clicked.connect(self.handle_connection)
         print("Señal de botón connect conectada")

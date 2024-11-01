@@ -34,14 +34,14 @@ class GraphHandler(QWidget):
         
         # Configurar el gráfico Flujo vs Tiempo
         self.flow_time_plot = self.flow_time_widget.getPlotItem()
-        self.flow_time_plot.setLabel('left', 'Flujo', 'L/s')
+        self.flow_time_plot.setLabel('left', 'Volumen', 'ml')
         self.flow_time_plot.setLabel('bottom', 'Tiempo', 's')
         self.flow_time_plot.showGrid(x=True, y=True)
         
         # Configurar el gráfico Flujo vs Presión
         self.flow_pressure_plot = self.flow_pressure_widget.getPlotItem()
         self.flow_pressure_plot.setLabel('left', 'Flujo', 'L/s')
-        self.flow_pressure_plot.setLabel('bottom', 'Presión', 'Kpa')
+        self.flow_pressure_plot.setLabel('bottom', 'Volumen', 'L')
         self.flow_pressure_plot.showGrid(x=True, y=True)
         
         # Configurar el fondo de los gráficos

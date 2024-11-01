@@ -56,7 +56,6 @@ class SerialHandler(QObject):
         self.port = port
         self.baudrate = baudrate
         self.reader_thread = None
-        print(f"SerialHandler inicializado - Puerto: {port}, Baudrate: {baudrate}")  # Debug print
 
     def get_available_ports(self):
         ports = [port.device for port in serial.tools.list_ports.comports()]

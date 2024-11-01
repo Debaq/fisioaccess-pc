@@ -123,7 +123,7 @@
           </widget>
          </item>
          <item>
-          <widget class="QPushButton" name="pushButton_3">
+          <widget class="QPushButton" name="btn_clear">
            <property name="text">
             <string>Borrar</string>
            </property>
