@@ -64,7 +64,6 @@ class SerialHandler(QObject):
     def get_available_ports(self):
         ports = [port.device for port in serial.tools.list_ports.comports()]
         acm_ports = [port for port in ports if re.search(r'ACM\d+$', port)]
-        print(f"Puertos disponibles: {acm_ports}")  # Debug print
         return acm_ports
         
     def open(self):
