@@ -50,7 +50,7 @@ class SerialHandler(QObject):
             
         self.is_reading = True
         self.read_thread = QThread()
-        self.moveToThread(self.read_thread)
+        #self.moveToThread(self.read_thread)
         self.read_thread.started.connect(self._read_loop)
         self.read_thread.start()
         return "Estamos grabando no se que te pasa!"
@@ -69,7 +69,7 @@ class SerialHandler(QObject):
         """Loop principal de lectura"""
         while self.is_reading:
             try:
-                data = self.serial.readline()
+                data = self.read_line()
 
                 self.data_received.emit(data)
             except Exception as e:

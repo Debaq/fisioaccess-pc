@@ -157,7 +157,8 @@ class MainWindow(QMainWindow, Ui_Main):
         
         # Desconectar si es necesario
         if self.btn_connect.isChecked():
-            self.serial_handler.disconnect()
+            self.serial_handler.stop_reading()
+            self.serial_handler.close()
             
         # Aceptar el evento de cierre
         event.accept()
