@@ -7,6 +7,8 @@ class FileHandler(QObject):
     # Señales para notificar estados
     save_status = Signal(str)
     error_occurred = Signal(str)
+    # Nueva señal para datos cargados
+    data_loaded = Signal(dict)
     
     def __init__(self):
         super().__init__()
@@ -29,7 +31,7 @@ class FileHandler(QObject):
             file_path, _ = QFileDialog.getSaveFileName(
                 parent,
                 "Guardar Datos",
-                os.path.expanduser("~/Documents"),  # Directorio inicial
+                os.path.expanduser("~/Documents"),
                 "Archivos CSV (*.csv)"
             )
 
@@ -73,26 +75,24 @@ class FileHandler(QObject):
             self.error_occurred.emit(error_msg)
             return False
 
-    def load_data_from_csv(self, parent):
+    def open_data_file(self, parent):
         """
-        Carga datos desde un archivo CSV.
+        Abre y carga datos desde un archivo CSV.
         
         Args:
             parent: Widget padre para el diálogo
-            
-        Returns:
-            dict: Diccionario con los datos cargados o None si hubo un error
         """
         try:
             # Abrir diálogo para seleccionar archivo
             file_path, _ = QFileDialog.getOpenFileName(
                 parent,
-                "Cargar Datos",
+                "Abrir Datos",
                 os.path.expanduser("~/Documents"),
                 "Archivos CSV (*.csv)"
             )
 
             if file_path:
+                # Inicializar diccionario de datos
                 data = {
                     't': [],
                     'p': [],
@@ -103,24 +103,37 @@ class FileHandler(QObject):
                 # Leer archivo CSV
                 with open(file_path, 'r') as file:
                     csv_reader = csv.reader(file)
-                    next(csv_reader)  # Saltar encabezados
                     
+                    # Leer encabezados
+                    headers = next(csv_reader)
+                    # Verificar formato del archivo
+                    expected_headers = ['tiempo', 'presion', 'flujo', 'volumen']
+                    if not all(h.lower() in [eh.lower() for eh in expected_headers] for h in headers):
+                        raise ValueError("Formato de archivo incorrecto: encabezados no coinciden")
+                    
+                    # Leer datos
                     for row in csv_reader:
-                        try:
-                            data['t'].append(float(row[0]))
-                            data['p'].append(float(row[1]))
-                            data['f'].append(float(row[2]))
-                            data['v'].append(float(row[3]))
-                        except (ValueError, IndexError) as e:
-                            self.error_occurred.emit(f"Error en formato de datos: {str(e)}")
-                            return None
-
+                        if len(row) >= 4:  # Verificar que la fila tenga todos los datos
+                            try:
+                                data['t'].append(float(row[0]))
+                                data['p'].append(float(row[1]))
+                                data['f'].append(float(row[2]))
+                                data['v'].append(float(row[3]))
+                            except ValueError as e:
+                                raise ValueError(f"Error en formato de datos: {str(e)}")
+                
+                # Verificar que se hayan cargado datos
+                if not data['t']:
+                    raise ValueError("No se encontraron datos válidos en el archivo")
+                
+                # Emitir datos cargados
+                self.data_loaded.emit(data)
                 self.save_status.emit(f"Datos cargados exitosamente de {file_path}")
-                return data
+                return True
 
-            return None
+            return False
 
         except Exception as e:
-            error_msg = f"Error al cargar datos: {str(e)}"
+            error_msg = f"Error al abrir archivo: {str(e)}"
             self.error_occurred.emit(error_msg)
-            return None
+            return False

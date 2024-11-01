@@ -47,6 +47,13 @@ class MainWindow(QMainWindow, Ui_Main):
         self.btn_clear.clicked.connect(self.clear_data)
         self.btn_reset.clicked.connect(self.reset_data)
 
+        # Conectar el botón de abrir
+        self.btn_open.clicked.connect(self.open_data)
+        
+        # Conectar la señal de datos cargados del file_handler
+        self.file_handler.data_loaded.connect(self.load_data_to_graph)
+
+
         # Conectar el botón de conexión
         self.btn_connect.clicked.connect(self.handle_connection)
         
@@ -164,6 +171,47 @@ class MainWindow(QMainWindow, Ui_Main):
             except Exception as e:
                 self.statusbar.showMessage(f"Error al desconectar: {str(e)}")
 
+
+    @Slot()
+    def open_data(self):
+        """Abrir y cargar datos desde un archivo"""
+        # Desconectar del puerto serial si está conectado
+        if self.btn_connect.isChecked():
+            self.btn_connect.setChecked(False)
+            self.handle_connection()
+        
+        # Abrir archivo
+        self.file_handler.open_data_file(self)
+
+    @Slot(dict)
+    def load_data_to_graph(self, data):
+        """
+        Cargar datos en el gráfico
+        
+        Args:
+            data (dict): Diccionario con los datos cargados
+        """
+        try:
+            # Limpiar datos actuales
+            self.graph_handler.clear_data()
+            
+            # Actualizar los datos uno por uno para asegurar la actualización correcta del gráfico
+            for i in range(len(data['t'])):
+                new_data = {
+                    't': data['t'][i],
+                    'p': data['p'][i],
+                    'f': data['f'][i],
+                    'v': data['v'][i]
+                }
+                self.graph_handler.update_data(new_data)
+            
+            # Deshabilitar botones de control serial
+            self.btn_start.setEnabled(False)
+            self.btn_connect.setEnabled(False)
+            self.serial_list.setEnabled(False)
+            
+        except Exception as e:
+            self.statusbar.showMessage(f"Error al cargar datos en el gráfico: {str(e)}")
 
     @Slot(int)
     def port_selected(self, index):
