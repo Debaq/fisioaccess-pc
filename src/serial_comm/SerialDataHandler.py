@@ -12,15 +12,13 @@ class SerialDataHandler(QObject):
     @Slot(str)
     def analisis_input_serial(self, data_string):
         """Analizar datos recibidos del puerto serial"""
-        print("entramos para analizar")
         try:
             
             # Limpiar el string
             data_string = data_string.strip()
-            print(f"se corto y quedo {data_string}")
             # Verificar si es el formato esperado
             values = data_string.split(',')
-            print(f"se separo en {values}")
+     
             if len(values) == 4:
                 # Convertir valores a float
                 t, p, f, v = map(float, values)
