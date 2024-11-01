@@ -14,6 +14,9 @@ class GraphHandler(QWidget):
         
         # Crear los gráficos
         self.setup_graphs()
+
+        # minimos y maximos en el volumen
+        self.min_max_vol = []
         
         # Datos originales para almacenamiento
         self.data = {
@@ -136,6 +139,7 @@ class GraphHandler(QWidget):
         
     def update_plots(self):
         """Actualizar ambos gráficos"""
+        self.max_value_f_v()
         if len(self.display_data['t']) > 0:
             # Actualizar Flujo vs Tiempo
             self.flow_time_curve.setData(
@@ -164,3 +168,14 @@ class GraphHandler(QWidget):
         
         # Actualizar gráficos
         self.update_plots()
+
+
+    #==============================
+
+    def max_value_f_v(self):
+        # Verifica si 'v' es una lista no vacía
+        if self.display_data['v'] and isinstance(self.display_data['v'], list):
+            # Calcula el valor máximo solo si la lista no está vacía
+            max_value = max(self.display_data['v'])
+            min_value = min(self.display_data['v'])
+            self.min_max_vol = [min_value, max_value]
