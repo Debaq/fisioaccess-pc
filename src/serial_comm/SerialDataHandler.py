@@ -12,7 +12,7 @@ class SerialDataHandler(QObject):
     @Slot(str)
     def analisis_input_serial(self, data_string):
         """Analizar datos recibidos del puerto serial"""
-        print(f"raw {data_string}")
+        print(type(data_string))
         try:
             
             # Limpiar el string
