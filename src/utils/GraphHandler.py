@@ -92,9 +92,18 @@ class GraphHandler(QWidget):
         Returns:
             float: Valor de tiempo calibrado (relativo al tiempo inicial)
         """
+        # Guardar el tiempo inicial en milisegundos si es el primer dato
         if self.initial_time is None:
             self.initial_time = time_value
-        return time_value - self.initial_time
+        
+        # Calcular tiempo relativo (en milisegundos)
+        relative_time_ms = time_value - self.initial_time
+        
+        # Convertir a segundos
+        relative_time_s = relative_time_ms / 1000.0
+        
+        return relative_time_s
+
         
     @Slot(dict)
     def update_data(self, new_data):
