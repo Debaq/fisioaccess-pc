@@ -33,43 +33,105 @@ class MainWindow(QMainWindow, Ui_Main):
         
         # Actualizar lista inicial de puertos
         self.update_port_list()
-        
+
     def connect_signals(self):
         """Conectar todas las señales necesarias"""
-        # Debug prints para verificar conexiones
-        print("Conectando señales en MainWindow...")
+        print("\nIniciando conexión de señales...")
         
+        # Verificar que el objeto serial_handler existe
+        print(f"Estado de serial_handler: {self.serial_handler}")
+        print(f"serial_handler tiene señal data_received: {hasattr(self.serial_handler, 'data_received')}")
+        
+        # Conectar el botón de conexión
         self.btn_connect.clicked.connect(self.handle_connection)
-        print("Botón de conexión conectado")
+        print("Señal de botón connect conectada")
         
+        # Conectar el cambio de selección del combo box
         self.serial_list.currentIndexChanged.connect(self.port_selected)
-        print("Combo box conectado")
+        print("Señal de combo box conectada")
 
-        # Conectar el manejador serial con debug
-        print("Conectando señal de datos recibidos...")
-        self.serial_handler.data_received.connect(self.print_info)
-        print("Señal de datos conectada")
+        # Verificar la conexión de señales del serial_handler
+        try:
+            # Desconectar primero para evitar conexiones duplicadas
+            try:
+                self.serial_handler.data_received.disconnect(self.print_info)
+            except:
+                pass
+            
+            # Reconectar la señal
+            self.serial_handler.data_received.connect(self.print_info)
+            print("Señal data_received conectada exitosamente a print_info")
+        except Exception as e:
+            print(f"Error al conectar serial_handler.data_received: {str(e)}")
 
-        self.data_handler.new_data.connect(self.graph_handler.update_data)
-        print("Handler de datos conectado")
+        # Verificar la conexión del data_handler
+        try:
+            self.data_handler.new_data.connect(self.graph_handler.update_data)
+            print("Señal new_data conectada exitosamente a graph_handler")
+        except Exception as e:
+            print(f"Error al conectar data_handler.new_data: {str(e)}")
         
         self.btn_start.setEnabled(False)
         self.btn_start.clicked.connect(self.start_read)
-        print("Botón de inicio conectado")
-    
-    @Slot()
-    def start_read(self):
-        print("Iniciando lectura...")
-        result = self.serial_handler.start_reading()
-        print(f"Resultado de inicio de lectura: {result}")
-        if self.serial_handler.reader_thread and self.serial_handler.reader_thread.isRunning():
-            print("Thread está activo")
-        else:
-            print("Thread no está activo")
+        print("Señal de botón start conectada")
+
+        print("Conexión de señales completada\n")
 
     @Slot()
+    def handle_connection(self):
+        """Manejar la conexión/desconexión del puerto serial"""
+        print("\nManejando conexión...")
+        if self.btn_connect.isChecked():
+            try:
+                port = self.serial_list.currentText()
+                print(f"Intentando conectar a puerto: {port}")
+                
+                # Crear nueva instancia de SerialHandler
+                self.serial_handler = SerialHandler(port=port)
+                
+                # Reconectar la señal data_received
+                try:
+                    self.serial_handler.data_received.disconnect(self.print_info)
+                except:
+                    pass
+                self.serial_handler.data_received.connect(self.print_info)
+                print("Señal data_received reconectada después de crear nuevo SerialHandler")
+                
+                if self.serial_handler.open():
+                    print("Conexión exitosa")
+                    self.statusbar.showMessage(f"Conectado a {port}")
+                    self.serial_list.setEnabled(False)
+                    self.btn_connect.setText("Desconectar")
+                    self.btn_start.setEnabled(True)
+                else:
+                    raise Exception("No se pudo conectar al puerto")
+                    
+            except Exception as e:
+                print(f"Error en conexión: {str(e)}")
+                self.statusbar.showMessage(f"Error de conexión: {str(e)}")
+                self.btn_connect.setChecked(False)
+                self.serial_list.setEnabled(True)
+        else:
+            # Código de desconexión...
+            pass
+
+    @Slot()
+    def start_read(self):
+        print("\nIniciando lectura...")
+        try:
+            result = self.serial_handler.start_reading()
+            print(f"Resultado de start_reading: {result}")
+            # Verificar estado del thread
+            if self.serial_handler.reader_thread:
+                print(f"Thread estado - isRunning: {self.serial_handler.reader_thread.isRunning()}")
+            else:
+                print("Thread no fue creado")
+        except Exception as e:
+            print(f"Error al iniciar lectura: {str(e)}")
+
+    @Slot(str)
     def print_info(self, data):
-        print(f"MainWindow recibió datos: {data}")
+        print(f"\nMainWindow.print_info recibido: {data}")
 
     @Slot()
     def update_port_list(self):
