@@ -23,16 +23,14 @@ class SerialReaderThread(QThread):
             try:
                 # Debug print cada 100 iteraciones
                 counter += 1
-                if counter % 100 == 0:
-                    print(f"Thread running... Loop count: {counter}")
-                    print(f"Serial port status - Is open: {self.serial_port.is_open}")
-                    print(f"Bytes waiting: {self.serial_port.in_waiting}")
+                #if counter % 100 == 0:
+                #    print(f"Thread running... Loop count: {counter}")
+                #    print(f"Serial port status - Is open: {self.serial_port.is_open}")
+                #    print(f"Bytes waiting: {self.serial_port.in_waiting}")
                 
                 if self.serial_port.in_waiting:
                     data = self.serial_port.readline().decode().strip()
-                    print(f"Datos leídos: {data}")  # Debug print
                     if data:
-                        print("Emitiendo señal con datos")  # Debug print
                         self.data_received.emit(data)
                 
             except Exception as e:
