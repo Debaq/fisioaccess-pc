@@ -21,7 +21,8 @@ class SerialReaderThread(QThread):
                     if data:
                         self.data_received.emit(data)
             except Exception as e:
-                print(f"Error en thread de lectura: {str(e)}")
+                data = f"Error en thread de lectura: {str(e)}"
+                self.data_received.emit(data)
                 break
             self.msleep(10)  # Pequeña pausa para no saturar el CPU
 
