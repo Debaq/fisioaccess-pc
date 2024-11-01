@@ -15,13 +15,24 @@ class GraphHandler(QWidget):
         # Crear los gráficos
         self.setup_graphs()
         
-        # Datos para los gráficos
+        # Datos originales para almacenamiento
         self.data = {
             't': [],
             'p': [],
             'f': [],
             'v': []
         }
+        
+        # Datos calibrados para visualización
+        self.display_data = {
+            't': [],
+            'p': [],
+            'f': [],
+            'v': []
+        }
+        
+        # Tiempo inicial para calibración
+        self.initial_time = None
         
         # Configurar estilos de las curvas
         self.setup_curve_styles()
@@ -70,42 +81,77 @@ class GraphHandler(QWidget):
             plot.getAxis('left').setPen('k')
             plot.getAxis('bottom').setTextPen('k')
             plot.getAxis('left').setTextPen('k')
+    
+    def calibrate_time(self, time_value):
+        """
+        Calibra el tiempo relativo a partir del tiempo absoluto.
+        
+        Args:
+            time_value (float): Valor de tiempo absoluto
+            
+        Returns:
+            float: Valor de tiempo calibrado (relativo al tiempo inicial)
+        """
+        if self.initial_time is None:
+            self.initial_time = time_value
+        return time_value - self.initial_time
         
     @Slot(dict)
     def update_data(self, new_data):
         """Actualizar los datos y gráficos"""
-        # Agregar nuevos datos
+        # Guardar datos originales
         for key in ['t', 'p', 'f', 'v']:
             if key in new_data:
                 self.data[key].append(new_data[key])
+        
+        # Calibrar tiempo y actualizar datos de visualización
+        calibrated_time = self.calibrate_time(new_data['t'])
+        self.display_data['t'].append(calibrated_time)
+        
+        # Actualizar otros datos de visualización
+        for key in ['p', 'f', 'v']:
+            if key in new_data:
+                self.display_data[key].append(new_data[key])
                 
-        # Mantener solo los últimos 1000 puntos
+        # Mantener solo los últimos 1000 puntos para visualización
         max_points = 1000
-        for key in self.data:
-            if len(self.data[key]) > max_points:
-                self.data[key] = self.data[key][-max_points:]
+        for key in self.display_data:
+            if len(self.display_data[key]) > max_points:
+                self.display_data[key] = self.display_data[key][-max_points:]
+        
+        # Mantener los datos originales sin límite
+        # (o implementar un límite mayor si es necesario)
                 
         # Actualizar gráficos
         self.update_plots()
         
     def update_plots(self):
         """Actualizar ambos gráficos"""
-        if len(self.data['t']) > 0:
+        if len(self.display_data['t']) > 0:
             # Actualizar Flujo vs Tiempo
             self.flow_time_curve.setData(
-                x=self.data['t'],
-                y=self.data['v']
+                x=self.display_data['t'],
+                y=self.display_data['v']
             )
             
             # Actualizar Flujo vs Presión
             self.flow_pressure_curve.setData(
-                x=self.data['v'],
-                y=self.data['f']
+                x=self.display_data['v'],
+                y=self.display_data['f']
             )
-            
     
     def clear_data(self):
         """Limpiar todos los datos"""
+        # Limpiar datos originales
         for key in self.data:
             self.data[key] = []
+            
+        # Limpiar datos de visualización
+        for key in self.display_data:
+            self.display_data[key] = []
+            
+        # Resetear tiempo inicial
+        self.initial_time = None
+        
+        # Actualizar gráficos
         self.update_plots()
