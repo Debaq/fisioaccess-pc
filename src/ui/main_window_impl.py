@@ -43,7 +43,7 @@ class MainWindow(QMainWindow, Ui_Main):
         self.serial_list.currentIndexChanged.connect(self.port_selected)
 
         #conectar entrada serial al handler
-        self.serial_handler.data_received.connect(self.data_handler.analisis_input_serial)
+        self.serial_handler.data_received.connect(self.print_info)
 
         # Conectar el manejador de datos con los gráficos
         self.data_handler.new_data.connect(self.graph_handler.update_data)
@@ -56,6 +56,10 @@ class MainWindow(QMainWindow, Ui_Main):
         if hasattr(self.serial_handler, 'data_received'):
             self.serial_handler.data_received.connect(self.data_handler.analisis_input_serial)
     
+    @Slot()
+    def print_info(self, data):
+        print(f"estamos recibiendo lo siguiente: {data}")
+
     @Slot()
     def update_port_list(self):
         """Actualizar la lista de puertos seriales disponibles"""

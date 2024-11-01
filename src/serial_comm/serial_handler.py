@@ -64,10 +64,9 @@ class SerialHandler(QObject):
     def _read_loop(self):
         """Loop principal de lectura"""
         while self.is_reading:
-            if self.serial and self.serial.in_waiting:
-                try:
-                    data = self.serial.readline().decode().strip()
+            try:
+                data = self.serial.readline()
 
-                    self.data_received.emit(data)
-                except Exception as e:
-                    print(f"Error leyendo datos: {str(e)}")
+                self.data_received.emit(data)
+            except Exception as e:
+                print(f"Error leyendo datos: {str(e)}")
