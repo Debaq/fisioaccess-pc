@@ -5,7 +5,7 @@ import re
 
 
 class SerialHandler(QObject):
-    data_received = Signal(list)  # Señal para enviar datos a la interfaz
+    data_received = Signal(str)  # Señal para enviar datos a la interfaz
 
     def __init__(self, port=None, baudrate=115200):
         super().__init__()
@@ -67,8 +67,7 @@ class SerialHandler(QObject):
             if self.serial and self.serial.in_waiting:
                 try:
                     data = self.serial.readline().decode().strip()
-                    # Aquí procesas los datos según tu protocolo
-                    # y emites la señal data_received
-                    self.data_received.emit([float(data)])
+
+                    self.data_received.emit(data)
                 except Exception as e:
                     print(f"Error leyendo datos: {str(e)}")
