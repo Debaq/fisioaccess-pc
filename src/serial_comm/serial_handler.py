@@ -116,7 +116,6 @@ class SerialHandler(QObject):
     @Slot(str)
     def handle_received_data(self, data):
         """Método intermedio para debug de señales"""
-        print(f"Datos recibidos en SerialHandler: {data}")
         self.data_received_serial.emit(data)
     
     def stop_reading(self):

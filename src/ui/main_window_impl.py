@@ -54,12 +54,12 @@ class MainWindow(QMainWindow, Ui_Main):
         try:
             # Desconectar primero para evitar conexiones duplicadas
             try:
-                self.serial_handler.data_received_serial.disconnect(self.print_info)
+                self.serial_handler.data_received_serial.disconnect(self.data_handler.analisis_input_serial)
             except:
                 pass
             
             # Reconectar la señal
-            self.serial_handler.data_received_serial.connect(self.print_info)
+            self.serial_handler.data_received_serial.connect(self.data_handler.analisis_input_serial)
             print("Señal data_received conectada exitosamente a print_info")
         except Exception as e:
             print(f"Error al conectar serial_handler.data_received: {str(e)}")
@@ -77,51 +77,7 @@ class MainWindow(QMainWindow, Ui_Main):
 
         print("Conexión de señales completada\n")
 
-    @Slot()
-    def handle_connection(self):
-        """Manejar la conexión/desconexión del puerto serial"""
-        print("\nManejando conexión...")
-        if self.btn_connect.isChecked():
-            try:
-                port = self.serial_list.currentText()
-                print(f"Intentando conectar a puerto: {port}")
-                
-                # Crear nueva instancia de SerialHandler
-                self.serial_handler = SerialHandler(port=port)
-                
-                # Reconectar la señal data_received
-                try:
-                    self.serial_handler.data_received_serial.disconnect(self.print_info)
-                except:
-                    pass
-                self.serial_handler.data_received_serial.connect(self.print_info)
-                print("Señal data_received reconectada después de crear nuevo SerialHandler")
-                
-                if self.serial_handler.open():
-                    print("Conexión exitosa")
-                    self.statusbar.showMessage(f"Conectado a {port}")
-                    self.serial_list.setEnabled(False)
-                    self.btn_connect.setText("Desconectar")
-                    self.btn_start.setEnabled(True)
-                else:
-                    raise Exception("No se pudo conectar al puerto")
-                    
-            except Exception as e:
-                print(f"Error en conexión: {str(e)}")
-                self.statusbar.showMessage(f"Error de conexión: {str(e)}")
-                self.btn_connect.setChecked(False)
-                self.serial_list.setEnabled(True)
-        else:
-            try:
-                if self.serial_handler:
-                    self.serial_handler.close()
-                self.statusbar.showMessage("Desconectado")
-                # Habilitar combo box después de desconectar
-                self.serial_list.setEnabled(True)
-                self.btn_connect.setText("Conectar")
-
-            except Exception as e:
-                self.statusbar.showMessage(f"Error al desconectar: {str(e)}")
+ 
     @Slot()
     def start_read(self):
         print("\nIniciando lectura...")
@@ -170,6 +126,54 @@ class MainWindow(QMainWindow, Ui_Main):
                 self.btn_connect.setChecked(False)
                 self.handle_connection()
     
+
+    @Slot()
+    def handle_connection(self):
+        """Manejar la conexión/desconexión del puerto serial"""
+        print("\nManejando conexión...")
+        if self.btn_connect.isChecked():
+            try:
+                port = self.serial_list.currentText()
+                print(f"Intentando conectar a puerto: {port}")
+                
+                # Crear nueva instancia de SerialHandler
+                self.serial_handler = SerialHandler(port=port)
+                
+                # Reconectar la señal data_received
+                try:
+                    self.serial_handler.data_received_serial.disconnect(self.print_info)
+                except:
+                    pass
+                self.serial_handler.data_received_serial.connect(self.print_info)
+                print("Señal data_received reconectada después de crear nuevo SerialHandler")
+                
+                if self.serial_handler.open():
+                    print("Conexión exitosa")
+                    self.statusbar.showMessage(f"Conectado a {port}")
+                    self.serial_list.setEnabled(False)
+                    self.btn_connect.setText("Desconectar")
+                    self.btn_start.setEnabled(True)
+                else:
+                    raise Exception("No se pudo conectar al puerto")
+                    
+            except Exception as e:
+                print(f"Error en conexión: {str(e)}")
+                self.statusbar.showMessage(f"Error de conexión: {str(e)}")
+                self.btn_connect.setChecked(False)
+                self.serial_list.setEnabled(True)
+        else:
+            try:
+                if self.serial_handler:
+                    self.serial_handler.close()
+                self.statusbar.showMessage("Desconectado")
+                # Habilitar combo box después de desconectar
+                self.serial_list.setEnabled(True)
+                self.btn_connect.setText("Conectar")
+
+            except Exception as e:
+                self.statusbar.showMessage(f"Error al desconectar: {str(e)}")
+
+
     @Slot(int)
     def port_selected(self, index):
         """Manejar la selección de un puerto en el combo box"""
