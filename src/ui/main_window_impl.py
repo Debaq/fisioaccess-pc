@@ -5,12 +5,15 @@ from .main_window import Ui_Main
 from serial_comm.serial_handler import SerialHandler  
 from serial_comm.SerialDataHandler import SerialDataHandler
 from utils.GraphHandler import GraphHandler
+from utils.FileHandler import FileHandler
 
 class MainWindow(QMainWindow, Ui_Main):
     def __init__(self):
         super().__init__()
         self.setupUi(self)
         
+        # Iniciar metodos de guardado
+        self.file_handler = FileHandler()
         # Inicializar el manejador serial
         self.serial_handler = SerialHandler()
         self.data_handler = SerialDataHandler()
@@ -36,6 +39,10 @@ class MainWindow(QMainWindow, Ui_Main):
 
     def connect_signals(self):
         """Conectar todas las señales necesarias"""
+        
+        self.file_handler.save_status.connect(self.statusbar.showMessage)
+        self.file_handler.error_occurred.connect(self.statusbar.showMessage)
+        self.btn_save.clicked.connect(self.save_data)
 
         self.btn_clear.clicked.connect(self.clear_data)
         self.btn_reset.clicked.connect(self.reset_data)
@@ -168,7 +175,10 @@ class MainWindow(QMainWindow, Ui_Main):
         if self.btn_connect.isChecked():
             self.btn_connect.setChecked(False)
             self.handle_connection()
-    
+    @Slot()
+    def save_data(self):
+        """Guardar datos actuales en CSV"""
+        self.file_handler.save_data_to_csv(self, self.graph_handler.data)
  
     @Slot()
     def clear_data(self):
