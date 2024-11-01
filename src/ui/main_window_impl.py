@@ -91,10 +91,10 @@ class MainWindow(QMainWindow, Ui_Main):
                 
                 # Reconectar la señal data_received
                 try:
-                    self.serial_handler.data_received.disconnect(self.print_info)
+                    self.serial_handler.data_received_serial.disconnect(self.print_info)
                 except:
                     pass
-                self.serial_handler.data_received.connect(self.print_info)
+                self.serial_handler.data_received_serial.connect(self.print_info)
                 print("Señal data_received reconectada después de crear nuevo SerialHandler")
                 
                 if self.serial_handler.open():
