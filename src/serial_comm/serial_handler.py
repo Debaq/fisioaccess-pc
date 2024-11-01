@@ -1,4 +1,4 @@
-from PySide6.QtCore import QObject, Signal, QThread
+from PySide6.QtCore import QObject, Signal, QThread, Slot
 import serial
 import serial.tools.list_ports
 import re
@@ -116,7 +116,7 @@ class SerialHandler(QObject):
                 return "Error: Thread no se inició correctamente"
         return "Thread ya existe"
 
-    @QObject.Slot(str)
+    @Slot(str)
     def handle_received_data(self, data):
         """Método intermedio para debug de señales"""
         print(f"Datos recibidos en SerialHandler: {data}")
