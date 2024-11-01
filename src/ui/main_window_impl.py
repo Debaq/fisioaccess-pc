@@ -75,20 +75,12 @@ class MainWindow(QMainWindow, Ui_Main):
     @Slot()
     def start_read(self):
         self.btn_start.setText("Pausa")
+        self.btn_start.setDisabled(True)
         try:
-            result = self.serial_handler.start_reading()
-            print(f"Resultado de start_reading: {result}")
-            # Verificar estado del thread
-            if self.serial_handler.reader_thread:
-                print(f"Thread estado - isRunning: {self.serial_handler.reader_thread.isRunning()}")
-            else:
-                print("Thread no fue creado")
+            self.serial_handler.start_reading()
+
         except Exception as e:
             print(f"Error al iniciar lectura: {str(e)}")
-
-    @Slot(str)
-    def print_info(self, data):
-        print(f"\nMainWindow.print_info recibido: {data}")
 
     @Slot()
     def update_port_list(self):

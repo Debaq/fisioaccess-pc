@@ -12,12 +12,10 @@ class SerialReaderThread(QThread):
         super().__init__()
         self.serial_port = serial_port
         self.is_running = False
-        print("Thread inicializado")  # Debug print
 
     def run(self):
-        print("Thread iniciado")  # Debug print
         self.is_running = True
-        counter = 0  # Contador para debug
+        #counter = 0  # Contador para debug
         
         while self.is_running and self.serial_port and self.serial_port.is_open:
             try:
@@ -91,23 +89,18 @@ class SerialHandler(QObject):
             raise Exception(error_msg)
             
         if self.reader_thread is None:
-            print("Creando nuevo thread de lectura")  # Debug print
             self.reader_thread = SerialReaderThread(self.serial)
             
             # Conectar señal con debug
-            print("Conectando señales...")
             self.reader_thread.data_received.connect(self.handle_received_data)
             
-            print("Iniciando thread...")
             self.reader_thread.start()
             
             # Verificar que el thread está corriendo
             time.sleep(0.1)  # Pequeña pausa para que el thread inicie
             if self.reader_thread.isRunning():
-                print("Thread iniciado correctamente")
                 return "Lectura iniciada correctamente"
             else:
-                print("Error: Thread no está corriendo")
                 return "Error: Thread no se inició correctamente"
         return "Thread ya existe"
 
