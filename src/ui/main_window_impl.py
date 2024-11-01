@@ -53,8 +53,8 @@ class MainWindow(QMainWindow, Ui_Main):
         self.btn_start.clicked.connect(self.start_read)
 
         # Conectar el manejador serial con el procesamiento de datos
-        if hasattr(self.serial_handler, 'data_received'):
-            self.serial_handler.data_received.connect(self.data_handler.analisis_input_serial)
+        #if hasattr(self.serial_handler, 'data_received'):
+        self.serial_handler.data_received.connect(self.data_handler.analisis_input_serial)
     
     @Slot()
     def start_read(self):

@@ -14,7 +14,7 @@ class SerialReaderThread(QThread):
 
     def run(self):
         self.is_running = True
-        while self.is_running and self.serial_port and self.serial_port.is_open:
+        while self.is_running:
             try:
                 if self.serial_port.in_waiting:
                     data = self.serial_port.readline().decode().strip()
@@ -72,8 +72,9 @@ class SerialHandler(QObject):
             self.reader_thread = SerialReaderThread(self.serial)
             self.reader_thread.data_received.connect(self.data_received)
             self.reader_thread.start()
-        return "Lectura iniciada correctamente"
-        
+            return "Lectura iniciada correctamente"
+        return "error al iniciar el qthread"
+    
     def stop_reading(self):
         """Detiene la lectura de datos"""
         if self.reader_thread:
