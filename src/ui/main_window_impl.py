@@ -58,7 +58,7 @@ class MainWindow(QMainWindow, Ui_Main):
     
     @Slot()
     def start_read(self):
-        print(self.serial_handler.read_line())
+        print(self.serial_handler.start_reading())
 
     @Slot()
     def print_info(self, data):
