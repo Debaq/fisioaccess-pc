@@ -39,7 +39,6 @@ class SerialReaderThread(QThread):
                 self.data_received.emit(error_msg)
                 break
                 
-            self.msleep(100)  # Aumentado para mejor debugging
 
     def stop(self):
         print("Stopping thread...")  # Debug print
