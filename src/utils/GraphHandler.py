@@ -53,7 +53,7 @@ class GraphHandler(QWidget):
         
         # Configurar el gráfico Flujo vs Tiempo
         self.flow_time_plot = self.flow_time_widget.getPlotItem()
-        self.flow_time_plot.setLabel('left', 'Volumen', 'ml')
+        self.flow_time_plot.setLabel('left', 'Volumen', 'L')
         self.flow_time_plot.setLabel('bottom', 'Tiempo', 's')
         self.flow_time_plot.showGrid(x=True, y=True)
         
@@ -191,7 +191,7 @@ class GraphHandler(QWidget):
                 self.diff_label.setPos(x_mid, y_position)
                 self.diff_label.setText(
                     f'ΔX: {x_diff:.2f} s\n'
-                    f'ΔY: {y_diff:.2f} ml'
+                    f'ΔY: {y_diff:.2f} L'
                 )
         except Exception as e:
             print(f"Error actualizando líneas: {e}")
