@@ -175,7 +175,6 @@ class GraphHandler(QWidget):
         self.graph_record = True
 
 
-    @Slot
     def stop_record(self):
         self.graph_record = False
 
