@@ -39,6 +39,8 @@ class GraphHandler(QWidget):
         
         # Configurar estilos de las curvas
         self.setup_curve_styles()
+
+        self.graph_record = True
         
     def setup_graphs(self):
         """Configurar los widgets de gráficos"""
@@ -111,31 +113,32 @@ class GraphHandler(QWidget):
     @Slot(dict)
     def update_data(self, new_data):
         """Actualizar los datos y gráficos"""
-        # Guardar datos originales
-        for key in ['t', 'p', 'f', 'v']:
-            if key in new_data:
-                self.data[key].append(new_data[key])
-        
-        # Calibrar tiempo y actualizar datos de visualización
-        calibrated_time = self.calibrate_time(new_data['t'])
-        self.display_data['t'].append(calibrated_time)
-        
-        # Actualizar otros datos de visualización
-        for key in ['p', 'f', 'v']:
-            if key in new_data:
-                self.display_data[key].append(new_data[key])
-                
-        # Mantener solo los últimos 1000 puntos para visualización
-        max_points = 1000
-        for key in self.display_data:
-            if len(self.display_data[key]) > max_points:
-                self.display_data[key] = self.display_data[key][-max_points:]
-        
-        # Mantener los datos originales sin límite
-        # (o implementar un límite mayor si es necesario)
-                
-        # Actualizar gráficos
-        self.update_plots()
+        if self.graph_record:
+            # Guardar datos originales
+            for key in ['t', 'p', 'f', 'v']:
+                if key in new_data:
+                    self.data[key].append(new_data[key])
+            
+            # Calibrar tiempo y actualizar datos de visualización
+            calibrated_time = self.calibrate_time(new_data['t'])
+            self.display_data['t'].append(calibrated_time)
+            
+            # Actualizar otros datos de visualización
+            for key in ['p', 'f', 'v']:
+                if key in new_data:
+                    self.display_data[key].append(new_data[key])
+                    
+            # Mantener solo los últimos 1000 puntos para visualización
+            max_points = 1000
+            for key in self.display_data:
+                if len(self.display_data[key]) > max_points:
+                    self.display_data[key] = self.display_data[key][-max_points:]
+            
+            # Mantener los datos originales sin límite
+            # (o implementar un límite mayor si es necesario)
+                    
+            # Actualizar gráficos
+            self.update_plots()
         
     def update_plots(self):
         """Actualizar ambos gráficos"""
@@ -169,6 +172,12 @@ class GraphHandler(QWidget):
         # Actualizar gráficos
         self.update_plots()
 
+        self.graph_record = True
+
+
+    @Slot
+    def stop_record(self):
+        self.graph_record = False
 
     #==============================
 

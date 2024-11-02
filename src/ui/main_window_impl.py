@@ -206,7 +206,11 @@ class MainWindow(QMainWindow, Ui_Main):
                 self.graph_handler.update_data(new_data)
             
             # Deshabilitar botones de control serial
-            self.btn_start.setEnabled(False)
+            #self.btn_start.setEnabled(False)
+            self.btn_start.setText("Detener")
+            self.btn_start.clicked.disconnect(self.start_read)
+            self.btn_start.clicked.connect(self.stop_read)
+
             self.btn_connect.setEnabled(False)
             self.serial_list.setEnabled(False)
             
@@ -235,7 +239,11 @@ class MainWindow(QMainWindow, Ui_Main):
 
         """Limpiar los gráficos"""
         self.graph_handler.clear_data()
-    
+        
+    @Slot()
+    def stop_read(self):
+        self.graph_handler.stop_record()
+
     @Slot()
     def reset_data(self):
         """resetear la placa"""
