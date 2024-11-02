@@ -89,8 +89,9 @@ class MainWindow(QMainWindow, Ui_Main):
  
     @Slot()
     def start_read(self):
-        self.btn_start.setText("Pausa")
-        self.btn_start.setDisabled(True)
+        self.btn_start.setText("Detener")
+        self.btn_start.clicked.disconnect(self.start_read)
+        self.btn_start.clicked.connect(self.stop_read)
         try:
             self.serial_handler.start_reading()
 
@@ -206,11 +207,7 @@ class MainWindow(QMainWindow, Ui_Main):
                 self.graph_handler.update_data(new_data)
             
             # Deshabilitar botones de control serial
-            #self.btn_start.setEnabled(False)
-            self.btn_start.setText("Detener")
-            self.btn_start.clicked.disconnect(self.start_read)
-            self.btn_start.clicked.connect(self.stop_read)
-
+            self.btn_start.setEnabled(False)
             self.btn_connect.setEnabled(False)
             self.serial_list.setEnabled(False)
             
