@@ -40,6 +40,9 @@ class GraphHandler(QWidget):
         # Configurar estilos de las curvas
         self.setup_curve_styles()
 
+        # Agregar líneas verticales móviles
+        self.setup_vertical_lines()
+
         self.graph_record = True
         
     def setup_graphs(self):
@@ -67,6 +70,29 @@ class GraphHandler(QWidget):
         # Agregar los widgets al layout con la proporción correcta
         self.layout.addWidget(self.flow_time_widget, stretch=2)
         self.layout.addWidget(self.flow_pressure_widget, stretch=1)
+
+    def setup_vertical_lines(self):
+        """Configurar las líneas verticales móviles"""
+        # Crear las líneas verticales para el gráfico Flujo vs Tiempo
+        self.vLine1 = pg.InfiniteLine(pos=0, angle=90, movable=True, pen=pg.mkPen('r', width=2))
+        self.vLine2 = pg.InfiniteLine(pos=1, angle=90, movable=True, pen=pg.mkPen('g', width=2))
+        
+        # Agregar las líneas al gráfico
+        self.flow_time_plot.addItem(self.vLine1)
+        self.flow_time_plot.addItem(self.vLine2)
+        
+        # Conectar señales para actualizar cuando las líneas se muevan
+        self.vLine1.sigPositionChanged.connect(self.line_moved)
+        self.vLine2.sigPositionChanged.connect(self.line_moved)
+        
+    def line_moved(self):
+        """Manejar el movimiento de las líneas verticales"""
+        x1 = self.vLine1.value()
+        x2 = self.vLine2.value()
+        
+        # Aquí puedes agregar código adicional para procesar
+        # los valores entre las dos líneas si lo deseas
+        print(f"Líneas en posiciones: {x1:.2f}, {x2:.2f}")
         
     def setup_curve_styles(self):
         """Configurar las curvas de los gráficos"""
@@ -108,7 +134,6 @@ class GraphHandler(QWidget):
         relative_time_s = relative_time_ms / 1000.0
         
         return relative_time_s
-
         
     @Slot(dict)
     def update_data(self, new_data):
@@ -134,9 +159,6 @@ class GraphHandler(QWidget):
                 if len(self.display_data[key]) > max_points:
                     self.display_data[key] = self.display_data[key][-max_points:]
             
-            # Mantener los datos originales sin límite
-            # (o implementar un límite mayor si es necesario)
-                    
             # Actualizar gráficos
             self.update_plots()
         
@@ -172,13 +194,14 @@ class GraphHandler(QWidget):
         # Actualizar gráficos
         self.update_plots()
 
-        self.graph_record = True
+        # Resetear posición de las líneas verticales
+        self.vLine1.setValue(0)
+        self.vLine2.setValue(1)
 
+        self.graph_record = True
 
     def stop_record(self):
         self.graph_record = False
-
-    #==============================
 
     def max_value_f_v(self):
         # Verifica si 'v' es una lista no vacía
