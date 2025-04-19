@@ -50,17 +50,17 @@ class MainWindow(QMainWindow, Ui_Main):
         self.limpiar_layout(self.graph_layout)
         if button.objectName() == "btn_test_ecg":
             self.graph_layout.addWidget(self.ecg_graph)
-        elif button.objectName == "btn_test_spiro":
+        elif button.objectName() == "btn_test_spiro":
             self.graph_layout.addWidget(self.spirometer_graph)
 
 
-        #QPushButton.text
-
+            #QPushButton.text
     def limpiar_layout(self, layout):
         while layout.count():
             item = layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+            widget = item.widget()
+            if widget:
+                widget.setParent(None)  # Quita el padre pero no destruye el widget
 
     def connect_signals(self):
         """Conectar todas las señales necesarias"""
