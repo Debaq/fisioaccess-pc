@@ -1,11 +1,14 @@
-from PySide6.QtWidgets import QMainWindow
+from PySide6.QtWidgets import QMainWindow, QPushButton
 from PySide6.QtCore import QTimer, Slot
 import serial.tools.list_ports
 from .main_window import Ui_Main
 from serial_comm.serial_handler import SerialHandler  
 from serial_comm.SerialDataHandler import SerialDataHandler
-from utils.GraphHandler import GraphHandler
+#from utils.GraphHandler import GraphHandler
 from utils.FileHandler import FileHandler
+
+from utils.SpirometryGraphManager import SpirometryGraphManager
+from utils.ECGGraphManager import ECGGraphManager
 
 class MainWindow(QMainWindow, Ui_Main):
     def __init__(self):
@@ -19,8 +22,9 @@ class MainWindow(QMainWindow, Ui_Main):
         self.data_handler = SerialDataHandler()
  
         # Inicializar los gráficos
-        self.graph_handler = GraphHandler()
-        self.horizontalLayout_2.addWidget(self.graph_handler)
+        self.spirometer_graph = SpirometryGraphManager()
+        self.ecg_graph = ECGGraphManager()
+        self.graph_layout.addWidget(self.ecg_graph)
 
 
         # Configurar el timer para actualizar la lista de puertos
@@ -36,6 +40,27 @@ class MainWindow(QMainWindow, Ui_Main):
         
         # Actualizar lista inicial de puertos
         self.update_port_list()
+
+        for objeto in self.findChildren(QPushButton):
+            if objeto.objectName().startswith("btn_test_"):
+                objeto.clicked.connect(self.reconnect_graph)
+
+    def reconnect_graph(self):
+        button = self.sender()
+        self.limpiar_layout(self.graph_layout)
+        if button.objectName() == "btn_test_ecg":
+            self.graph_layout.addWidget(self.ecg_graph)
+        elif button.objectName == "btn_test_spiro":
+            self.graph_layout.addWidget(self.spirometer_graph)
+
+
+        #QPushButton.text
+
+    def limpiar_layout(self, layout):
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
 
     def connect_signals(self):
         """Conectar todas las señales necesarias"""
