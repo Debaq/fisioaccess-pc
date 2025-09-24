@@ -131,8 +131,6 @@ void resetVolume() {
     volume = 0;
     lastMeasurementTime = millis();
     resetMeasurementTime = lastMeasurementTime;
-    Serial.println("Volumen reseteado a 0");
-    Serial.println("Tiempo(ms),Presion(kPa),Flujo(L/s),Volumen(L)");
 }
 
 void fullReset() {
@@ -140,7 +138,6 @@ void fullReset() {
     calibrateSensor();
     lastMeasurementTime = millis();
     resetMeasurementTime = lastMeasurementTime;
-    Serial.println("Tiempo(ms),Presion(kPa),Flujo(L/s),Volumen(L)");
 }
 
 void setup(void) {
