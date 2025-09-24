@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'mainxiOpuU.ui'
+## Form generated from reading UI file 'maintfEXef.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.7.2
+## Created by: Qt User Interface Compiler version 6.9.2
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -17,9 +17,9 @@ from PySide6.QtGui import (QAction, QBrush, QColor, QConicalGradient,
     QPainter, QPalette, QPixmap, QRadialGradient,
     QTransform)
 from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QHBoxLayout,
-    QMainWindow, QMenu, QMenuBar, QPushButton,
-    QSizePolicy, QSpacerItem, QStatusBar, QVBoxLayout,
-    QWidget)
+    QListWidget, QListWidgetItem, QMainWindow, QMenu,
+    QMenuBar, QPushButton, QSizePolicy, QSpacerItem,
+    QStatusBar, QVBoxLayout, QWidget)
 
 class Ui_Main(object):
     def setupUi(self, Main):
@@ -79,10 +79,32 @@ class Ui_Main(object):
 
         self.verticalLayout.addWidget(self.horizontalFrame)
 
+        self.horizontalLayout_5 = QHBoxLayout()
+        self.horizontalLayout_5.setObjectName(u"horizontalLayout_5")
+        self.horizontalLayout_5.setContentsMargins(0, -1, -1, -1)
+        self.verticalLayout_2 = QVBoxLayout()
+        self.verticalLayout_2.setObjectName(u"verticalLayout_2")
+        self.list_test = QListWidget(self.centralwidget)
+        self.list_test.setObjectName(u"list_test")
+        self.list_test.setMaximumSize(QSize(200, 16777215))
+
+        self.verticalLayout_2.addWidget(self.list_test)
+
+        self.btn_delete_test = QPushButton(self.centralwidget)
+        self.btn_delete_test.setObjectName(u"btn_delete_test")
+
+        self.verticalLayout_2.addWidget(self.btn_delete_test)
+
+
+        self.horizontalLayout_5.addLayout(self.verticalLayout_2)
+
         self.horizontalLayout_2 = QHBoxLayout()
         self.horizontalLayout_2.setObjectName(u"horizontalLayout_2")
 
-        self.verticalLayout.addLayout(self.horizontalLayout_2)
+        self.horizontalLayout_5.addLayout(self.horizontalLayout_2)
+
+
+        self.verticalLayout.addLayout(self.horizontalLayout_5)
 
         self.horizontalFrame_3 = QFrame(self.centralwidget)
         self.horizontalFrame_3.setObjectName(u"horizontalFrame_3")
@@ -102,6 +124,11 @@ class Ui_Main(object):
         self.btn_clear.setObjectName(u"btn_clear")
 
         self.horizontalLayout_4.addWidget(self.btn_clear)
+
+        self.btn_cal = QPushButton(self.horizontalFrame_3)
+        self.btn_cal.setObjectName(u"btn_cal")
+
+        self.horizontalLayout_4.addWidget(self.btn_cal)
 
         self.btn_reset = QPushButton(self.horizontalFrame_3)
         self.btn_reset.setObjectName(u"btn_reset")
@@ -130,7 +157,7 @@ class Ui_Main(object):
         Main.setCentralWidget(self.centralwidget)
         self.menubar = QMenuBar(Main)
         self.menubar.setObjectName(u"menubar")
-        self.menubar.setGeometry(QRect(0, 0, 800, 23))
+        self.menubar.setGeometry(QRect(0, 0, 800, 30))
         self.menuArchivo = QMenu(self.menubar)
         self.menuArchivo.setObjectName(u"menuArchivo")
         self.menuNuevo = QMenu(self.menuArchivo)
@@ -159,8 +186,10 @@ class Ui_Main(object):
         self.actionEOG.setText(QCoreApplication.translate("Main", u"EMG", None))
         self.btn_open.setText(QCoreApplication.translate("Main", u"Abrir", None))
         self.btn_connect.setText(QCoreApplication.translate("Main", u"conectar", None))
+        self.btn_delete_test.setText(QCoreApplication.translate("Main", u"Eliminar", None))
         self.btn_start.setText(QCoreApplication.translate("Main", u"Iniciar", None))
         self.btn_clear.setText(QCoreApplication.translate("Main", u"Borrar", None))
+        self.btn_cal.setText(QCoreApplication.translate("Main", u"Calibrar", None))
         self.btn_reset.setText(QCoreApplication.translate("Main", u"Reset", None))
         self.btn_save.setText(QCoreApplication.translate("Main", u"Guardar", None))
         self.menuArchivo.setTitle(QCoreApplication.translate("Main", u"Archivo", None))

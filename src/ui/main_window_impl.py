@@ -1,5 +1,5 @@
-from PySide6.QtWidgets import QMainWindow
-from PySide6.QtCore import QTimer, Slot
+from PySide6.QtWidgets import QMainWindow, QListWidgetItem
+from PySide6.QtCore import QTimer, Slot, Qt
 import serial.tools.list_ports
 from .main_window import Ui_Main
 from serial_comm.serial_handler import SerialHandler  
@@ -12,6 +12,11 @@ class MainWindow(QMainWindow, Ui_Main):
         super().__init__()
         self.setupUi(self)
         
+        # Variables de estado
+        self.is_calibrated = False
+        self.is_testing = False
+        self.test_counter = 0
+        
         # Iniciar metodos de guardado
         self.file_handler = FileHandler()
         # Inicializar el manejador serial
@@ -21,7 +26,6 @@ class MainWindow(QMainWindow, Ui_Main):
         # Inicializar los gráficos
         self.graph_handler = GraphHandler()
         self.horizontalLayout_2.addWidget(self.graph_handler)
-
 
         # Configurar el timer para actualizar la lista de puertos
         self.port_timer = QTimer()
@@ -36,6 +40,9 @@ class MainWindow(QMainWindow, Ui_Main):
         
         # Actualizar lista inicial de puertos
         self.update_port_list()
+        
+        # Estado inicial de botones
+        self.update_button_states()
 
     def connect_signals(self):
         """Conectar todas las señales necesarias"""
@@ -45,14 +52,15 @@ class MainWindow(QMainWindow, Ui_Main):
         self.btn_save.clicked.connect(self.save_data)
 
         self.btn_clear.clicked.connect(self.clear_data)
-        self.btn_reset.clicked.connect(self.reset_data)
-
+        
+        # Cambiar reset por calibración
+        self.btn_cal.clicked.connect(self.calibrate)
+        
         # Conectar el botón de abrir
         self.btn_open.clicked.connect(self.open_data)
         
         # Conectar la señal de datos cargados del file_handler
         self.file_handler.data_loaded.connect(self.load_data_to_graph)
-
 
         # Conectar el botón de conexión
         self.btn_connect.clicked.connect(self.handle_connection)
@@ -76,27 +84,211 @@ class MainWindow(QMainWindow, Ui_Main):
         # Verificar la conexión del data_handler
         try:
             self.data_handler.new_data.connect(self.graph_handler.update_data)
+            self.data_handler.other_string.connect(self.handle_calibration_response)
+
             print("Señal new_data conectada exitosamente a graph_handler")
         except Exception as e:
             print(f"Error al conectar data_handler.new_data: {str(e)}")
         
-        self.btn_start.setEnabled(False)
-        self.btn_start.clicked.connect(self.start_read)
-        print("Señal de botón start conectada")
+        # Conectar señal de prueba completada
+        try:
+            self.graph_handler.new_recording_created.connect(self.on_test_completed)
+            print("Señal new_recording_created conectada")
+        except Exception as e:
+            print(f"Error al conectar new_recording_created: {str(e)}")
+        
+        self.btn_start.clicked.connect(self.start_test)
+        
+        # Conectar señales del list_test
+        self.list_test.itemSelectionChanged.connect(self.on_test_selection_changed)
+        # Conectar botón para eliminar pruebas
+        self.btn_delete_test.clicked.connect(self.delete_selected_test)
 
         print("Conexión de señales completada\n")
 
- 
-    @Slot()
-    def start_read(self):
-        self.btn_start.setText("Detener")
-        self.btn_start.clicked.disconnect(self.start_read)
-        self.btn_start.clicked.connect(self.stop_read)
-        try:
-            self.serial_handler.start_reading()
+    def update_button_states(self):
+        """Actualizar el estado de los botones según el estado actual"""
+        is_connected = self.btn_connect.isChecked()
+        
+        # Botón calibrar: solo disponible si está conectado y no está probando
+        self.btn_cal.setEnabled(is_connected and not self.is_testing)
+        
+        # Botón iniciar: solo disponible si está calibrado y no está probando
+        self.btn_start.setEnabled(is_connected and self.is_calibrated and not self.is_testing)
+        
+        # Botón limpiar: disponible si está conectado y no está probando
+        self.btn_clear.setEnabled(is_connected and not self.is_testing)
+        
+        # Botón eliminar test: disponible si hay algo seleccionado en la lista
+        self.btn_delete_test.setEnabled(self.list_test.currentItem() is not None)
+        
+        # Lista de puertos: deshabilitada si está conectado o probando
+        self.serial_list.setEnabled(not is_connected and not self.is_testing)
 
+    @Slot()
+    def calibrate(self):
+        """Enviar comando de calibración"""
+        try:
+            if self.serial_handler:
+                # Asegurar que la lectura esté activa
+                if not hasattr(self.serial_handler, 'reader_thread') or self.serial_handler.reader_thread is None:
+                    self.serial_handler.start_reading()
+                
+                # Enviar comando de calibración
+                self.serial_handler.write_data("r")
+                self.statusbar.showMessage("Enviando comando de calibración...")
+                # El estado se actualizará cuando llegue la respuesta de calibración
         except Exception as e:
-            print(f"Error al iniciar lectura: {str(e)}")
+            self.statusbar.showMessage(f"Error al calibrar: {str(e)}")
+            print(f"Error en calibración: {str(e)}")
+
+    @Slot()
+    def handle_calibration_response(self, data):
+        """Manejar la respuesta de calibración"""
+        if data.startswith("Iniciando calibración"):
+            self.statusbar.showMessage("Calibración iniciada...")
+            self.btn_cal.setEnabled(False)  # Deshabilitar botón durante calibración
+        elif data.startswith("Asegúrese que no hay flujo"):
+            self.statusbar.showMessage("IMPORTANTE: Asegúrese que no hay flujo de aire")
+        elif data.startswith("Calibrando:"):
+            # Mostrar progreso de calibración
+            self.statusbar.showMessage(f"Calibrando... {data}")
+        elif data.startswith("Calibración completada."):
+            self.statusbar.showMessage("Calibración completada - Configurando sistema...")
+        elif data.startswith("Desviación estándar:"):
+            self.statusbar.showMessage(f"Calibración exitosa - {data}")
+        elif data.startswith("Iniciando mediciones..."):
+            # Aquí es donde realmente está listo
+            self.is_calibrated = True
+            self.graph_handler.reset_data()
+            self.statusbar.showMessage("Sistema calibrado y listo para iniciar prueba")
+            self.update_button_states()
+        elif data.startswith("Tiempo(ms),Presion(kPa)"):
+            # Headers de datos, ignorar o registrar
+            pass
+        else:
+            self.statusbar.showMessage(f"Dispositivo: {data}")
+
+    @Slot()
+    def start_test(self):
+        """Iniciar una nueva prueba"""
+        
+        try:
+            if self.serial_handler:
+                # Asegurar que la lectura esté activa
+                if not hasattr(self.serial_handler, 'reader_thread') or self.serial_handler.reader_thread is None:
+                    self.serial_handler.start_reading()
+                
+                # Enviar comando de calibración
+                self.serial_handler.write_data("v")
+                self.statusbar.showMessage("Enviando comando de volumen...")
+        except:
+            pass
+        
+        if not self.is_calibrated:
+            self.statusbar.showMessage("Debe calibrar antes de iniciar una prueba")
+            return
+            
+        try:
+            self.is_testing = True
+            self.update_button_states()
+            
+            # Iniciar nueva grabación
+            self.graph_handler.start_new_recording()
+            
+            # La lectura ya debe estar activa desde la calibración
+            # No necesitamos llamar start_reading() aquí
+            
+            self.statusbar.showMessage("Prueba iniciada...")
+            
+        except Exception as e:
+            self.is_testing = False
+            self.update_button_states()
+            self.statusbar.showMessage(f"Error al iniciar prueba: {str(e)}")
+            print(f"Error al iniciar prueba: {str(e)}")
+
+    @Slot()
+    def on_test_completed(self, recording_data):
+        """Manejar cuando se completa una prueba"""
+        try:
+            self.is_testing = False
+            self.test_counter += 1
+            
+            # Crear item en la lista de pruebas
+            test_name = f"Prueba {self.test_counter}"
+            item = QListWidgetItem(test_name)
+            
+            # Guardar el número de grabación, no todo el objeto
+            if isinstance(recording_data, dict) and 'recording_number' in recording_data:
+                recording_number = recording_data['recording_number']
+            else:
+                recording_number = recording_data  # Asumir que ya es el número
+            
+            item.setData(Qt.UserRole, recording_number)
+            self.list_test.addItem(item)
+            
+            print(f"Test agregado: {test_name}, recording_number: {recording_number}")
+            
+            self.statusbar.showMessage(f"Prueba completada - {test_name} agregada a la lista")
+            self.update_button_states()
+            
+            # Detener la lectura serial
+            if self.serial_handler:
+                self.serial_handler.stop_reading()
+                
+        except Exception as e:
+            self.statusbar.showMessage(f"Error al completar prueba: {str(e)}")
+            print(f"Error al completar prueba: {str(e)}")
+
+    @Slot()
+    def on_test_selection_changed(self):
+        """Manejar cambio de selección en la lista de pruebas"""
+        current_item = self.list_test.currentItem()
+        if current_item:
+            # Actualizar estado del botón eliminar
+            self.update_button_states()
+            
+            # Aquí podrías mostrar los datos de la prueba seleccionada
+            recording_data = current_item.data(Qt.UserRole)
+            self.statusbar.showMessage(f"Seleccionada: {current_item.text()}")
+        else:
+            # Ninguna prueba seleccionada
+            self.update_button_states()
+            self.statusbar.showMessage("Ninguna prueba seleccionada")
+
+    @Slot()
+    def delete_selected_test(self):
+        """Eliminar la prueba seleccionada"""
+        current_item = self.list_test.currentItem()
+        if not current_item:
+            self.statusbar.showMessage("No hay prueba seleccionada para eliminar")
+            return
+            
+        try:
+            test_name = current_item.text()
+            row = self.list_test.row(current_item)
+            recording_number = current_item.data(Qt.UserRole)
+            
+            print(f"Intentando eliminar: {test_name}, recording_number: {recording_number}")
+            print(f"Lista actual de grabaciones: {self.graph_handler.get_recording_list()}")
+            
+            # Eliminar del graph_handler primero
+            if hasattr(self.graph_handler, 'delete_recording') and recording_number is not None:
+                success = self.graph_handler.delete_recording(recording_number)
+                print(f"Eliminación del gráfico: {'exitosa' if success else 'falló'}")
+                print(f"Lista después de eliminar: {self.graph_handler.get_recording_list()}")
+            
+            # Eliminar de la lista visual
+            self.list_test.takeItem(row)
+            
+            # Actualizar estados de botones
+            self.update_button_states()
+            
+            self.statusbar.showMessage(f"Prueba eliminada: {test_name}")
+            
+        except Exception as e:
+            self.statusbar.showMessage(f"Error al eliminar prueba: {str(e)}")
+            print(f"Error al eliminar prueba: {str(e)}")
 
     @Slot()
     def update_port_list(self):
@@ -121,13 +313,12 @@ class MainWindow(QMainWindow, Ui_Main):
             self.available_ports = ports
             
             # Deshabilitar el botón de conexión si no hay puertos
-            self.btn_connect.setEnabled(len(ports) > 0)
+            self.btn_connect.setEnabled(len(ports) > 0 and not self.is_testing)
             
             # Si no hay puertos y estaba conectado, desconectar
             if not ports and self.btn_connect.isChecked():
                 self.btn_connect.setChecked(False)
                 self.handle_connection()
-    
 
     @Slot()
     def handle_connection(self):
@@ -147,10 +338,12 @@ class MainWindow(QMainWindow, Ui_Main):
                 self.serial_handler.data_received_serial.connect(self.data_handler.analisis_input_serial)
                 
                 if self.serial_handler.open():
-                    self.statusbar.showMessage(f"Conectado a {port}")
-                    self.serial_list.setEnabled(False)
+                    self.statusbar.showMessage(f"Conectado a {port} - Debe calibrar antes de iniciar pruebas")
                     self.btn_connect.setText("Desconectar")
-                    self.btn_start.setEnabled(True)
+                    
+                    # Reset del estado de calibración al conectar
+                    self.is_calibrated = False
+                    self.update_button_states()
                 
                 else:
                     raise Exception("No se pudo conectar al puerto")
@@ -159,19 +352,22 @@ class MainWindow(QMainWindow, Ui_Main):
                 print(f"Error en conexión: {str(e)}")
                 self.statusbar.showMessage(f"Error de conexión: {str(e)}")
                 self.btn_connect.setChecked(False)
-                self.serial_list.setEnabled(True)
+                self.update_button_states()
         else:
             try:
                 if self.serial_handler:
+                    self.serial_handler.stop_reading()
                     self.serial_handler.close()
                 self.statusbar.showMessage("Desconectado")
-                # Habilitar combo box después de desconectar
-                self.serial_list.setEnabled(True)
                 self.btn_connect.setText("Conectar")
+                
+                # Reset de estados al desconectar
+                self.is_calibrated = False
+                self.is_testing = False
+                self.update_button_states()
 
             except Exception as e:
                 self.statusbar.showMessage(f"Error al desconectar: {str(e)}")
-
 
     @Slot()
     def open_data(self):
@@ -207,9 +403,9 @@ class MainWindow(QMainWindow, Ui_Main):
                 self.graph_handler.update_data(new_data)
             
             # Deshabilitar botones de control serial
-            self.btn_start.setEnabled(False)
-            self.btn_connect.setEnabled(False)
-            self.serial_list.setEnabled(False)
+            self.is_testing = False
+            self.is_calibrated = False
+            self.update_button_states()
             
         except Exception as e:
             self.statusbar.showMessage(f"Error al cargar datos en el gráfico: {str(e)}")
@@ -217,38 +413,27 @@ class MainWindow(QMainWindow, Ui_Main):
     @Slot(int)
     def port_selected(self, index):
         """Manejar la selección de un puerto en el combo box"""
-        # Si hay un puerto seleccionado, habilitar el botón de conexión
-        self.btn_connect.setEnabled(index >= 0)
+        # Si hay un puerto seleccionado y no está probando, habilitar el botón de conexión
+        self.btn_connect.setEnabled(index >= 0 and not self.is_testing)
         
         # Si cambia el puerto y estaba conectado, desconectar
         if self.btn_connect.isChecked():
             self.btn_connect.setChecked(False)
             self.handle_connection()
+
     @Slot()
     def save_data(self):
         """Guardar datos actuales en CSV"""
         self.file_handler.save_data_to_csv(self, self.graph_handler.data)
- 
+
     @Slot()
     def clear_data(self):
-        """Limpiar el puerto serial"""
-        self.serial_handler.write_data("v")
-
-        """Limpiar los gráficos"""
-        self.graph_handler.clear_data()
+        """Limpiar el puerto serial y los gráficos"""
+        if self.serial_handler and not self.is_testing:
+            self.serial_handler.write_data("v")
         
-    @Slot()
-    def stop_read(self):
-        self.graph_handler.stop_record()
-
-    @Slot()
-    def reset_data(self):
-        """resetear la placa"""
-        self.serial_handler.write_data("r")
-
-        """Limpiar los gráficos"""
+        # Limpiar los gráficos
         self.graph_handler.clear_data()
-    
 
     def closeEvent(self, event):
         """Manejar el cierre de la ventana"""
@@ -257,8 +442,9 @@ class MainWindow(QMainWindow, Ui_Main):
         
         # Desconectar si es necesario
         if self.btn_connect.isChecked():
-            self.serial_handler.stop_reading()
-            self.serial_handler.close()
+            if self.serial_handler:
+                self.serial_handler.stop_reading()
+                self.serial_handler.close()
             
         # Aceptar el evento de cierre
         event.accept()
