@@ -338,12 +338,22 @@ class GraphHandler(QWidget):
 
             # El volumen ya viene en litros desde el equipo
             volume = new_data.get('v', 0)
+            t_raw = new_data.get('t', 0)
+
+            # Detectar reset de placa: si timestamp actual es mucho menor que el anterior
+            if hasattr(self, 'last_timestamp') and t_raw < self.last_timestamp * 0.1 and self.last_timestamp > 1000:
+                self.start_time = None  # Forzar recálculo
+                self.recording_started = False  # Reiniciar grabación
+                print(f"DEBUG: Reset de placa detectado, timestamp: {t_raw}, último: {self.last_timestamp}")
+                
+            # Actualizar último timestamp
+            self.last_timestamp = t_raw
 
             # Si aún no ha empezado a grabar, esperar volumen positivo Y activación manual
             if not self.recording_started:
                 if volume > 0 and self.ready_for_new_recording:  # Requiere activación manual
                     self.recording_started = True
-                    self.start_time = new_data.get('t', 0)
+                    self.start_time = t_raw  # Usar el timestamp actual como referencia
                     # Limpiar solo los datos actuales
                     for key in self.display_data:
                         self.display_data[key] = []
@@ -351,7 +361,6 @@ class GraphHandler(QWidget):
                 return
 
             # ---------- grabación activa ----------
-            t_raw = new_data.get('t', 0)
             t_rel = (t_raw - self.start_time) / 1000.0  # ms → s (tiempo relativo desde inicio)
 
             # Verificar tiempo negativo

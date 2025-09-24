@@ -183,6 +183,8 @@ class MainWindow(QMainWindow, Ui_Main):
                 self.serial_handler.write_data("v")
                 self.statusbar.showMessage("Enviando comando de volumen...")
                 self.graph_handler.reset_data()
+                #self.graph_handler.start_time= None
+                
         except:
             pass
         
