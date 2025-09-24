@@ -1,4 +1,4 @@
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QObject, Signal, Slot, QTimer
 import time
 from typing import Dict, Optional, Any
 
@@ -18,13 +18,17 @@ class DeviceInfo:
         self.graph_manager = None
         self.status = {}
         self.capabilities = {}
+        self.tab_index = -1  # Índice de la pestaña correspondiente
 
 class DeviceManager(QObject):
     # Señales para comunicar cambios de estado
-    device_added = Signal(str, dict)  # (device_type, device_info)
-    device_removed = Signal(str)  # (device_type)
+    device_detected = Signal(str, dict)  # (device_type, device_info)
+    device_connected = Signal(str, dict)  # (device_type, device_info) 
+    device_disconnected = Signal(str)  # (device_type)
     device_status_changed = Signal(str, dict)  # (device_type, status)
     active_device_changed = Signal(str)  # (device_type)
+    request_tab_switch = Signal(str)  # (device_type) - Nueva señal para UI
+    request_tab_disable = Signal(list)  # (disabled_device_types) - Nueva señal
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -43,17 +47,27 @@ class DeviceManager(QObject):
             'EEG': self._create_eeg_manager
         }
         
+        # Mapeo de tipos de dispositivo a índices de pestaña
+        self.device_tab_mapping = {
+            'SPIRO': 0,  # Pestaña de espirometría
+            'ECG': 1,    # Pestaña de ECG
+            'EMG': 2,    # Pestaña de EMG
+            'EEG': 3     # Pestaña de EEG
+        }
+        
         # Configuraciones por defecto para cada tipo de dispositivo
         self.device_defaults = {
             'SPIRO': {
                 'sampling_rate': 200,
                 'filter': True,
+                'name': 'Espirómetro',
                 'units': {'pressure': 'Pa', 'flow': 'L/s', 'volume': 'L'},
                 'ranges': {'pressure': (-1000, 1000), 'flow': (-15, 15), 'volume': (0, 8)}
             },
             'ECG': {
                 'sampling_rate': 500,
                 'filter': True,
+                'name': 'Electrocardiógrafo',
                 'leads': ['I', 'II', 'III', 'aVR', 'aVL', 'aVF'],
                 'units': {'amplitude': 'mV'},
                 'ranges': {'amplitude': (-3, 3)}
@@ -61,6 +75,7 @@ class DeviceManager(QObject):
             'EMG': {
                 'sampling_rate': 1000,
                 'filter': True,
+                'name': 'Electromiografía',
                 'channels': 8,
                 'units': {'amplitude': 'mV'},
                 'ranges': {'amplitude': (-5, 5)}
@@ -68,6 +83,7 @@ class DeviceManager(QObject):
             'EEG': {
                 'sampling_rate': 512,
                 'filter': True,
+                'name': 'Electroencefalografía',
                 'channels': 64,
                 'units': {'amplitude': 'µV'},
                 'ranges': {'amplitude': (-100, 100)}
@@ -75,7 +91,6 @@ class DeviceManager(QObject):
         }
         
         # Timer para cleanup de dispositivos desconectados
-        from PySide6.QtCore import QTimer
         self.cleanup_timer = QTimer()
         self.cleanup_timer.timeout.connect(self._cleanup_disconnected_devices)
         self.cleanup_timer.start(5000)  # Cada 5 segundos
@@ -83,22 +98,25 @@ class DeviceManager(QObject):
     @Slot(str, dict)
     def register_device(self, device_type: str, device_info: dict):
         """
-        Registrar un nuevo dispositivo detectado.
+        Registrar y conectar un nuevo dispositivo detectado.
         
         Args:
             device_type (str): Tipo de dispositivo (SPIRO, ECG, etc.)
             device_info (dict): Información del dispositivo
         """
-        if device_type not in self.devices:
+        is_new_device = device_type not in self.devices
+        
+        if is_new_device:
             # Crear nueva entrada de dispositivo
             device = DeviceInfo(
                 device_type=device_type,
-                device_name=device_info.get('name', f'Dispositivo {device_type}'),
+                device_name=device_info.get('name', self.device_defaults.get(device_type, {}).get('name', f'Dispositivo {device_type}')),
                 port=device_info.get('port', None)
             )
             
             # Configurar capacidades por defecto
             device.capabilities = self.device_defaults.get(device_type, {}).copy()
+            device.tab_index = self.device_tab_mapping.get(device_type, -1)
             
             # Crear graph manager
             device.graph_manager = self._create_graph_manager(device_type)
@@ -106,64 +124,53 @@ class DeviceManager(QObject):
             # Registrar dispositivo
             self.devices[device_type] = device
             
-            # Si es el primer dispositivo, hacerlo activo
-            if self.active_device is None:
-                self.set_active_device(device_type)
-            
-            # Emitir señal
-            self.device_added.emit(device_type, self._get_device_info_dict(device))
-            
-            print(f"Dispositivo {device_type} registrado exitosamente")
-        
-        # Actualizar información existente
+            # Emitir señal de detección
+            self.device_detected.emit(device_type, self._get_device_info_dict(device))
+            print(f"Nuevo dispositivo detectado: {device_type}")
         else:
             device = self.devices[device_type]
-            device.connected = True
-            device.last_seen = time.time()
+        
+        # Marcar como conectado y actualizar
+        device.connected = True
+        device.last_seen = time.time()
+        
+        # Actualizar puerto si cambió
+        new_port = device_info.get('port')
+        if new_port and device.port != new_port:
+            device.port = new_port
+        
+        # Si es el primer dispositivo conectado o reconexión, hacerlo activo
+        if self.active_device is None or not self.devices.get(self.active_device, DeviceInfo('', '')).connected:
+            self.set_active_device(device_type)
             
-            # Actualizar puerto si cambió
-            new_port = device_info.get('port')
-            if new_port and device.port != new_port:
-                device.port = new_port
-                
-            print(f"Dispositivo {device_type} actualizado")
+        # Emitir señal de conexión
+        self.device_connected.emit(device_type, self._get_device_info_dict(device))
+        print(f"Dispositivo {device_type} conectado en puerto {device.port}")
+        
+        # Solicitar cambio automático de pestaña
+        self._request_ui_update(device_type)
 
-    def _create_graph_manager(self, device_type: str):
+    def _request_ui_update(self, connected_device_type: str):
         """
-        Crear el graph manager apropiado para el tipo de dispositivo.
+        Solicitar actualización de la UI cuando se conecta un dispositivo.
         
         Args:
-            device_type (str): Tipo de dispositivo
-            
-        Returns:
-            BaseGraphManager: Graph manager correspondiente
+            connected_device_type (str): Tipo de dispositivo que se conectó
         """
-        factory_func = self.graph_factories.get(device_type)
-        if factory_func:
-            return factory_func()
-        else:
-            print(f"Warning: No hay factory para dispositivo {device_type}")
-            return None
-
-    def _create_spiro_manager(self):
-        """Crear SpirometryGraphManager"""
-        return SpirometryGraphManager()
-
-    def _create_ecg_manager(self):
-        """Crear ECGGraphManager"""
-        return ECGGraphManager()
-
-    def _create_emg_manager(self):
-        """Crear EMGGraphManager (placeholder)"""
-        # TODO: Implementar EMGGraphManager
-        print("Warning: EMGGraphManager no implementado aún")
-        return None
-
-    def _create_eeg_manager(self):
-        """Crear EEGGraphManager (placeholder)"""
-        # TODO: Implementar EEGGraphManager
-        print("Warning: EEGGraphManager no implementado aún")
-        return None
+        # Obtener lista de dispositivos no conectados para desactivar sus pestañas
+        disconnected_devices = []
+        for dev_type, dev_info in self.devices.items():
+            if not dev_info.connected and dev_type != connected_device_type:
+                disconnected_devices.append(dev_type)
+        
+        # Añadir tipos de dispositivo que nunca han sido detectados
+        for dev_type in self.device_tab_mapping:
+            if dev_type not in self.devices:
+                disconnected_devices.append(dev_type)
+        
+        # Emitir señales para actualizar UI
+        self.request_tab_switch.emit(connected_device_type)
+        self.request_tab_disable.emit(disconnected_devices)
 
     def set_active_device(self, device_type: str):
         """
@@ -172,7 +179,7 @@ class DeviceManager(QObject):
         Args:
             device_type (str): Tipo de dispositivo a activar
         """
-        if device_type in self.devices:
+        if device_type in self.devices and self.devices[device_type].connected:
             old_active = self.active_device
             self.active_device = device_type
             
@@ -181,49 +188,53 @@ class DeviceManager(QObject):
                 self.active_device_changed.emit(device_type)
                 print(f"Dispositivo activo cambiado a: {device_type}")
         else:
-            print(f"Error: Dispositivo {device_type} no está registrado")
+            print(f"Error: Dispositivo {device_type} no está conectado")
+
+    def disconnect_device(self, device_type: str):
+        """
+        Marcar un dispositivo como desconectado.
+        
+        Args:
+            device_type (str): Tipo de dispositivo
+        """
+        if device_type in self.devices:
+            self.devices[device_type].connected = False
+            
+            # Si era el dispositivo activo, buscar otro
+            if self.active_device == device_type:
+                # Buscar otro dispositivo conectado
+                for dev_type, dev_info in self.devices.items():
+                    if dev_info.connected:
+                        self.set_active_device(dev_type)
+                        self._request_ui_update(dev_type)
+                        break
+                else:
+                    # No hay dispositivos conectados
+                    self.active_device = None
+                    self.request_tab_disable.emit(list(self.device_tab_mapping.keys()))
+            
+            # Emitir señal de desconexión
+            self.device_disconnected.emit(device_type)
+            print(f"Dispositivo {device_type} desconectado")
 
     def get_active_device(self) -> Optional[str]:
-        """
-        Obtener el tipo de dispositivo activo.
-        
-        Returns:
-            str: Tipo de dispositivo activo o None
-        """
+        """Obtener el tipo de dispositivo activo"""
         return self.active_device
 
     def get_active_graph_manager(self):
-        """
-        Obtener el graph manager del dispositivo activo.
-        
-        Returns:
-            BaseGraphManager: Graph manager activo o None
-        """
+        """Obtener el graph manager del dispositivo activo"""
         if self.active_device and self.active_device in self.devices:
             return self.devices[self.active_device].graph_manager
         return None
 
     def get_device_graph_manager(self, device_type: str):
-        """
-        Obtener el graph manager de un dispositivo específico.
-        
-        Args:
-            device_type (str): Tipo de dispositivo
-            
-        Returns:
-            BaseGraphManager: Graph manager del dispositivo o None
-        """
+        """Obtener el graph manager de un dispositivo específico"""
         if device_type in self.devices:
             return self.devices[device_type].graph_manager
         return None
 
     def get_connected_devices(self) -> Dict[str, dict]:
-        """
-        Obtener lista de dispositivos conectados.
-        
-        Returns:
-            dict: Diccionario con información de dispositivos conectados
-        """
+        """Obtener lista de dispositivos conectados"""
         connected = {}
         for device_type, device in self.devices.items():
             if device.connected and self._is_device_alive(device):
@@ -231,103 +242,65 @@ class DeviceManager(QObject):
         return connected
 
     def get_device_capabilities(self, device_type: str) -> dict:
-        """
-        Obtener las capacidades de un dispositivo.
-        
-        Args:
-            device_type (str): Tipo de dispositivo
-            
-        Returns:
-            dict: Capacidades del dispositivo
-        """
+        """Obtener las capacidades de un dispositivo"""
         if device_type in self.devices:
             return self.devices[device_type].capabilities.copy()
-        return {}
+        return self.device_defaults.get(device_type, {}).copy()
+
+    def get_tab_index_for_device(self, device_type: str) -> int:
+        """Obtener el índice de pestaña para un tipo de dispositivo"""
+        return self.device_tab_mapping.get(device_type, -1)
 
     def update_device_status(self, device_type: str, status: dict):
-        """
-        Actualizar el estado de un dispositivo.
-        
-        Args:
-            device_type (str): Tipo de dispositivo
-            status (dict): Nuevo estado
-        """
+        """Actualizar el estado de un dispositivo"""
         if device_type in self.devices:
             device = self.devices[device_type]
             device.status.update(status)
             device.last_seen = time.time()
-            
-            # Emitir señal de cambio de estado
             self.device_status_changed.emit(device_type, device.status.copy())
 
     def send_command_to_device(self, device_type: str, command: dict) -> bool:
-        """
-        Enviar comando a un dispositivo específico.
-        
-        Args:
-            device_type (str): Tipo de dispositivo
-            command (dict): Comando a enviar
-            
-        Returns:
-            bool: True si se pudo enviar el comando
-        """
+        """Enviar comando a un dispositivo específico"""
         if device_type in self.devices and self.devices[device_type].connected:
-            # TODO: Implementar envío de comando vía SerialHandler
+            # TODO: Implementar envío vía SerialHandler
             print(f"Enviando comando a {device_type}: {command}")
             return True
         return False
 
     def send_command_to_active(self, command: dict) -> bool:
-        """
-        Enviar comando al dispositivo activo.
-        
-        Args:
-            command (dict): Comando a enviar
-            
-        Returns:
-            bool: True si se pudo enviar el comando
-        """
+        """Enviar comando al dispositivo activo"""
         if self.active_device:
             return self.send_command_to_device(self.active_device, command)
         return False
 
-    def remove_device(self, device_type: str):
-        """
-        Remover un dispositivo del registry.
-        
-        Args:
-            device_type (str): Tipo de dispositivo a remover
-        """
-        if device_type in self.devices:
-            # Limpiar graph manager si existe
-            if self.devices[device_type].graph_manager:
-                self.devices[device_type].graph_manager.clear_data()
-            
-            # Remover del registry
-            del self.devices[device_type]
-            
-            # Si era el dispositivo activo, seleccionar otro
-            if self.active_device == device_type:
-                remaining_devices = list(self.devices.keys())
-                self.active_device = remaining_devices[0] if remaining_devices else None
-                if self.active_device:
-                    self.active_device_changed.emit(self.active_device)
-            
-            # Emitir señal
-            self.device_removed.emit(device_type)
-            print(f"Dispositivo {device_type} removido")
+    def _create_graph_manager(self, device_type: str):
+        """Crear el graph manager apropiado para el tipo de dispositivo"""
+        factory_func = self.graph_factories.get(device_type)
+        if factory_func:
+            return factory_func()
+        else:
+            print(f"Warning: No hay factory para dispositivo {device_type}")
+            return None
+
+    def _create_spiro_manager(self):
+        return SpirometryGraphManager()
+
+    def _create_ecg_manager(self):
+        return ECGGraphManager()
+
+    def _create_emg_manager(self):
+        # TODO: Implementar EMGGraphManager
+        print("Warning: EMGGraphManager no implementado aún")
+        return None
+
+    def _create_eeg_manager(self):
+        # TODO: Implementar EEGGraphManager  
+        print("Warning: EEGGraphManager no implementado aún")
+        return None
 
     def _is_device_alive(self, device: DeviceInfo) -> bool:
-        """
-        Verificar si un dispositivo está vivo basado en last_seen.
-        
-        Args:
-            device (DeviceInfo): Información del dispositivo
-            
-        Returns:
-            bool: True si el dispositivo está vivo
-        """
-        return (time.time() - device.last_seen) < 10.0  # 10 segundos timeout
+        """Verificar si un dispositivo está vivo basado en last_seen"""
+        return (time.time() - device.last_seen) < 10.0
 
     def _cleanup_disconnected_devices(self):
         """Limpiar dispositivos desconectados automáticamente"""
@@ -335,25 +308,14 @@ class DeviceManager(QObject):
         
         for device_type, device in self.devices.items():
             if device.connected and not self._is_device_alive(device):
-                device.connected = False
                 disconnected_devices.append(device_type)
         
-        # Remover dispositivos desconectados
+        # Marcar como desconectados
         for device_type in disconnected_devices:
-            print(f"Dispositivo {device_type} desconectado por timeout")
-            # No remover completamente, solo marcar como desconectado
-            # self.remove_device(device_type)
+            self.disconnect_device(device_type)
 
     def _get_device_info_dict(self, device: DeviceInfo) -> dict:
-        """
-        Convertir DeviceInfo a diccionario para señales.
-        
-        Args:
-            device (DeviceInfo): Información del dispositivo
-            
-        Returns:
-            dict: Información del dispositivo como diccionario
-        """
+        """Convertir DeviceInfo a diccionario"""
         return {
             'name': device.device_name,
             'type': device.device_type,
@@ -361,47 +323,14 @@ class DeviceManager(QObject):
             'connected': device.connected,
             'last_seen': device.last_seen,
             'status': device.status.copy(),
-            'capabilities': device.capabilities.copy()
+            'capabilities': device.capabilities.copy(),
+            'tab_index': device.tab_index
         }
 
     def get_device_types(self) -> list:
-        """
-        Obtener lista de tipos de dispositivos soportados.
-        
-        Returns:
-            list: Lista de tipos de dispositivos
-        """
+        """Obtener lista de tipos de dispositivos soportados"""
         return list(self.graph_factories.keys())
 
     def is_device_supported(self, device_type: str) -> bool:
-        """
-        Verificar si un tipo de dispositivo es soportado.
-        
-        Args:
-            device_type (str): Tipo de dispositivo
-            
-        Returns:
-            bool: True si es soportado
-        """
+        """Verificar si un tipo de dispositivo es soportado"""
         return device_type in self.graph_factories
-
-    def configure_device(self, device_type: str, config: dict):
-        """
-        Configurar un dispositivo específico.
-        
-        Args:
-            device_type (str): Tipo de dispositivo
-            config (dict): Configuración a aplicar
-        """
-        if device_type in self.devices:
-            device = self.devices[device_type]
-            device.capabilities.update(config)
-            
-            # Enviar comando de configuración al dispositivo
-            cmd = {
-                "cmd": "config",
-                "params": config
-            }
-            self.send_command_to_device(device_type, cmd)
-            
-            print(f"Configuración aplicada a {device_type}: {config}")
