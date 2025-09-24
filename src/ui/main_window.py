@@ -800,11 +800,11 @@ class Ui_Main(object):
 
         self.gridLayout_4.addWidget(self.btn_start, 1, 0, 1, 1)
 
-        self.btn_clear = QPushButton(self.tab_1)
-        self.btn_clear.setObjectName(u"btn_clear")
-        self.btn_clear.setStyleSheet(u"background-color: rgb(244, 67, 54);")
+        #self.btn_clear = QPushButton(self.tab_1)
+        #self.btn_clear.setObjectName(u"btn_clear")
+        #self.btn_clear.setStyleSheet(u"background-color: rgb(244, 67, 54);")
 
-        self.gridLayout_4.addWidget(self.btn_clear, 1, 2, 1, 1)
+        #self.gridLayout_4.addWidget(self.btn_clear, 1, 2, 1, 1)
 
         self.label_9 = QLabel(self.tab_1)
         self.label_9.setObjectName(u"label_9")
@@ -1094,7 +1094,7 @@ class Ui_Main(object):
         self.label_2.setText(QCoreApplication.translate("Main", u"### Configuraci\u00f3n de Adquisici\u00f3n", None))
         self.pushButton_29.setText(QCoreApplication.translate("Main", u"Pausar", None))
         self.btn_start.setText(QCoreApplication.translate("Main", u"Iniciar", None))
-        self.btn_clear.setText(QCoreApplication.translate("Main", u"Detener", None))
+        #self.btn_clear.setText(QCoreApplication.translate("Main", u"Detener", None))
         self.label_9.setText(QCoreApplication.translate("Main", u"Tiempo :", None))
         self.label_10.setText(QCoreApplication.translate("Main", u"00:00:00", None))
         self.label_11.setText(QCoreApplication.translate("Main", u"Estado: Detenicdo", None))

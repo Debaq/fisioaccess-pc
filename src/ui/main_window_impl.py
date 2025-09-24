@@ -62,6 +62,8 @@ class MainWindow(QMainWindow, Ui_Main):
     def connect_signals(self):
         """Conectar todas las señales necesarias"""
         
+        self.data_handler.new_data.connect(lambda device, data: print(f"🎯 Enviando a gráfico {device}: {data}"))
+
         # Señales del FileHandler
         self.file_handler.save_status.connect(self.statusbar.showMessage)
         self.file_handler.error_occurred.connect(self.statusbar.showMessage)
@@ -72,7 +74,7 @@ class MainWindow(QMainWindow, Ui_Main):
         self.btn_open.clicked.connect(self.open_data)
 
         # Botones de control de datos
-        self.btn_clear.clicked.connect(self.clear_data)
+        #self.btn_clear.clicked.connect(self.clear_data)
         self.btn_reset.clicked.connect(self.reset_data)
 
         # Configuración del botón de conexión serial
@@ -98,8 +100,8 @@ class MainWindow(QMainWindow, Ui_Main):
 
         # Señales del DataHandler - CORREGIDO
         try:
-            self.data_handler.new_data.connect(self.spiro_graph.update_data)
-            self.data_handler.new_data.connect(self.ecg_graph.update_data)
+            self.data_handler.new_data.connect(self.route_data_to_graph)
+
             print("Señal new_data conectada exitosamente a graph managers")
         except Exception as e:
             print(f"Error al conectar data_handler.new_data: {str(e)}")
@@ -115,16 +117,35 @@ class MainWindow(QMainWindow, Ui_Main):
 
         print("Conexión de señales completada\n")
     
+    
+    
+    @Slot(str, dict)
+    def route_data_to_graph(self, device_type, data_dict):
+        """Enrutar datos al gráfico correcto según el tipo de dispositivo"""
+        if device_type == "SPIRO":
+            self.spiro_graph.update_data(data_dict)
+        elif device_type == "ECG":
+            self.ecg_graph.update_data(data_dict)
+        # Agregar otros dispositivos aquí
+    
     @Slot()
     def start_read(self):
+        # Limpiar datos y resetear tiempo ANTES de iniciar
+        current_widget = self.graph_layout.itemAt(0).widget() if self.graph_layout.count() > 0 else None
+        if current_widget:
+            current_widget.clear_data()  # Esto resetea initial_time = None
+        
+        # Cambiar botón
         self.btn_start.setText("Detener")
         self.btn_start.clicked.disconnect(self.start_read)
         self.btn_start.clicked.connect(self.stop_read)
+        
         try:
+            # Iniciar lectura y enviar comando start
             self.serial_handler.start_reading()
-
+            self.serial_handler.write_data('{"cmd": "start", "params": {}}')
         except Exception as e:
-            print(f"Error al iniciar lectura: {str(e)}")
+            print(f"Error al iniciar: {str(e)}")
 
     @Slot()
     def update_port_list(self):

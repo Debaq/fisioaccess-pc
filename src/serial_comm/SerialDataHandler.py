@@ -79,6 +79,8 @@ class SerialDataHandler(QObject):
     
     @Slot(str)
     def analisis_input_serial(self, data_string):
+        #print(f"🔍 Datos recibidos: {data_string}")  # <- AGREGAR ESTO
+
         """Analizar datos recibidos del puerto serial"""
         try:
             # Limpiar el string
@@ -182,6 +184,9 @@ class SerialDataHandler(QObject):
             device_type (str): Tipo de dispositivo
             message (dict): Mensaje completo
         """
+        
+        #print(f"📊 Procesando datos {device_type}: {message}")  # <- AGREGAR ESTO
+
         payload = message.get('payload', {})
         
         # Añadir timestamp al payload para compatibilidad
