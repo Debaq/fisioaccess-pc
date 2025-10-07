@@ -62,7 +62,7 @@ class GraphHandler(QWidget):
         self.flow_time_plot.setLabel('bottom', 'Tiempo', 's')
         self.flow_time_plot.showGrid(x=True, y=True)
         
-        grafico_volumen_tiempo_x = 8
+        grafico_volumen_tiempo_x = 17
         grafico_volumen_tiempo_y = 6
         # ESCALA FIJA IZQUIERDO: Y: 0-4L, X: 0-4s
         self.flow_time_plot.setXRange(0, grafico_volumen_tiempo_x, padding=0)
@@ -101,14 +101,14 @@ class GraphHandler(QWidget):
             angle=90, 
             movable=True,
             pen=pg.mkPen('r', width=2),
-            bounds=(0, 4)  # Limitar movimiento a rango X
+            bounds=(0, 16)  # Limitar movimiento a rango X
         )
         self.vLine2 = pg.InfiniteLine(
             pos=1.5, 
             angle=90, 
             movable=True,
             pen=pg.mkPen('g', width=2),
-            bounds=(0, 4)  # Limitar movimiento a rango X
+            bounds=(0, 16)  # Limitar movimiento a rango X
         )
         
         self.v_line_fvc = pg.InfiniteLine(
@@ -124,6 +124,8 @@ class GraphHandler(QWidget):
             angle=90, 
             movable=True,
             pen=pg.mkPen('b', width=2),
+            label="PEF",
+            labelOpts={"movable":True, "position":0.8, "color":(250, 0, 0)},
             bounds=(0, 7)  # Limitar movimiento a rango X
         )
 
@@ -132,14 +134,19 @@ class GraphHandler(QWidget):
             angle=90, 
             movable=False,
             pen=pg.mkPen('r', width=2),
+            label="fef025",
+            labelOpts={"movable":True, "position":0.8, "color":(250, 0, 0)},
             bounds=(0, 7)  # Limitar movimiento a rango X
         )
+        #self.text_line_fev025 = pg.InfLineLabel(self.v_line_fev025, text="FEV025", movable=True, position=0.5)
 
         self.v_line_fev050 = pg.InfiniteLine(
             pos=2, 
             angle=90, 
             movable=False,
             pen=pg.mkPen('b', width=2),
+            label="fef050",
+            labelOpts={"movable":True, "position":0.8, "color":(250, 0, 0)},
             bounds=(0, 7)  # Limitar movimiento a rango X
         )
 
@@ -148,6 +155,8 @@ class GraphHandler(QWidget):
             angle=90, 
             movable=False,
             pen=pg.mkPen('g', width=2),
+            label="fef075",
+            labelOpts={"movable":True, "position":0.8, "color":(250, 0, 0)},
             bounds=(0, 7)  # Limitar movimiento a rango X
         )
 
@@ -156,15 +165,16 @@ class GraphHandler(QWidget):
             angle=90, 
             movable=True,
             pen=pg.mkPen('r', width=2),
+            label="FVC",
+            labelOpts={"movable":True, "position":0.8, "color":(250, 0, 0)},
             bounds=(0, 7)  # Limitar movimiento a rango X
         )
         
         # Crear etiquetas para las líneas
         self.label1 = pg.TextItem(text='', color='r', anchor=(0, 1))
         self.label2 = pg.TextItem(text='', color='g', anchor=(0, 1))
-        self.label3 = pg.TextItem(text='', color='g', anchor=(0, 1))
-        self.label4 = pg.TextItem(text='', color='g', anchor=(0, 1))
         
+
         # Crear etiqueta para la diferencia
         self.diff_label = pg.TextItem(text='', color='b', anchor=(0, 0))
         
@@ -244,6 +254,8 @@ class GraphHandler(QWidget):
             self.v_line_fev050.setValue(pef + diff_4*2)
             self.v_line_fev075.setValue(pef + diff_4*3)
             print(f"pef {pef} , fvc {fvc}, fev025 {self.v_line_fev025.setValue(pef + diff_4)}")
+            
+            #self.text_line_fev025.setFormat(f"fev025: {self.v_line_fev025.value()}")
 
         except:
             pass
