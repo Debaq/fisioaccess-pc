@@ -31,7 +31,7 @@ class GraphHandler(QWidget):
         self.recording_started = False
         self.start_time = None
         self.recording_count = 0
-        self.max_recordings = 10
+        self.max_recordings = 9
         self.recording_duration = 6.0  # Ajustar tiempo de duracion de la prueba
         self.ready_for_new_recording = False  # Control manual de grabaciones
         
@@ -66,8 +66,8 @@ class GraphHandler(QWidget):
         grafico_volumen_tiempo_y = 6
         # ESCALA FIJA IZQUIERDO: Y: 0-4L, X: 0-4s
         self.flow_time_plot.setXRange(0, grafico_volumen_tiempo_x, padding=0)
-        self.flow_time_plot.setYRange(0, grafico_volumen_tiempo_y, padding=0)
-        self.flow_time_plot.getViewBox().setLimits(xMin=0, xMax=grafico_volumen_tiempo_x, yMin=0, yMax=grafico_volumen_tiempo_y)
+        self.flow_time_plot.setYRange(-4, grafico_volumen_tiempo_y, padding=0)
+        self.flow_time_plot.getViewBox().setLimits(xMin=0, xMax=grafico_volumen_tiempo_x, yMin=-4, yMax=grafico_volumen_tiempo_y)
         self.flow_time_plot.getViewBox().setMouseEnabled(x=False, y=False)  # Deshabilitar zoom/pan
         
         # Configurar el gráfico Flujo vs Volumen (DERECHO)
