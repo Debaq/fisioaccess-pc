@@ -392,23 +392,26 @@ class MainWindow(QMainWindow, Ui_Main):
             data (dict): Diccionario con los datos cargados
         """
         try:
-            # Limpiar datos actuales
-            self.graph_handler.clear_data()
+            # Activar grabación de gráficos
+            self.graph_handler.graph_record = True
             
-            # Actualizar los datos uno por uno para asegurar la actualización correcta del gráfico
-            for i in range(len(data['t'])):
-                new_data = {
-                    't': data['t'][i],
-                    'p': data['p'][i],
-                    'f': data['f'][i],
-                    'v': data['v'][i]
-                }
-                self.graph_handler.update_data(new_data)
+            # Asignar datos directamente a display_data
+            self.graph_handler.display_data = {
+                't': data['t'].copy(),
+                'p': data['p'].copy(),
+                'f': data['f'].copy(),
+                'v': data['v'].copy()
+            }
+            
+            # Actualizar visualización
+            self.graph_handler.update_plots()
             
             # Deshabilitar botones de control serial
             self.is_testing = False
             self.is_calibrated = False
             self.update_button_states()
+            
+            self.statusbar.showMessage(f"Datos cargados: {len(data['t'])} puntos")
             
         except Exception as e:
             self.statusbar.showMessage(f"Error al cargar datos en el gráfico: {str(e)}")
@@ -427,7 +430,8 @@ class MainWindow(QMainWindow, Ui_Main):
     @Slot()
     def save_data(self):
         """Guardar datos actuales en CSV"""
-        self.file_handler.save_data_to_csv(self, self.graph_handler.data)
+        #self.file_handler.save_data_to_csv(self, self.graph_handler.data)
+        self.file_handler.save_data_to_csv(self, self.graph_handler.display_data)
 
     @Slot()
     def clear_data(self):

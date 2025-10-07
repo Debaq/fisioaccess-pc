@@ -25,13 +25,14 @@ class GraphHandler(QWidget):
             'f': [],
             'v': []
         }
-        
+
+
         # Variables de grabación
         self.recording_started = False
         self.start_time = None
         self.recording_count = 0
         self.max_recordings = 10
-        self.recording_duration = 3.0  # 3 segundos
+        self.recording_duration = 6.0  # Ajustar tiempo de duracion de la prueba
         self.ready_for_new_recording = False  # Control manual de grabaciones
         
         # Almacenar todas las grabaciones
@@ -61,10 +62,12 @@ class GraphHandler(QWidget):
         self.flow_time_plot.setLabel('bottom', 'Tiempo', 's')
         self.flow_time_plot.showGrid(x=True, y=True)
         
+        grafico_volumen_tiempo_x = 8
+        grafico_volumen_tiempo_y = 6
         # ESCALA FIJA IZQUIERDO: Y: 0-4L, X: 0-4s
-        self.flow_time_plot.setXRange(0, 4, padding=0)
-        self.flow_time_plot.setYRange(0, 4, padding=0)
-        self.flow_time_plot.getViewBox().setLimits(xMin=0, xMax=4, yMin=0, yMax=4)
+        self.flow_time_plot.setXRange(0, grafico_volumen_tiempo_x, padding=0)
+        self.flow_time_plot.setYRange(0, grafico_volumen_tiempo_y, padding=0)
+        self.flow_time_plot.getViewBox().setLimits(xMin=0, xMax=grafico_volumen_tiempo_x, yMin=0, yMax=grafico_volumen_tiempo_y)
         self.flow_time_plot.getViewBox().setMouseEnabled(x=False, y=False)  # Deshabilitar zoom/pan
         
         # Configurar el gráfico Flujo vs Volumen (DERECHO)
@@ -73,10 +76,13 @@ class GraphHandler(QWidget):
         self.flow_pressure_plot.setLabel('bottom', 'Volumen', 'L')
         self.flow_pressure_plot.showGrid(x=True, y=True)
         
+
+        grafico_flujo_volumen_x = 8
+        grafico_flujo_volumen_y = 10
         # ESCALA FIJA DERECHO: Y: -8 a 8 L/s, X: -1 a 4 L
-        self.flow_pressure_plot.setXRange(-1, 4, padding=0)
-        self.flow_pressure_plot.setYRange(-8, 8, padding=0)
-        self.flow_pressure_plot.getViewBox().setLimits(xMin=-1, xMax=4, yMin=-8, yMax=8)
+        self.flow_pressure_plot.setXRange(0, grafico_flujo_volumen_x, padding=0)
+        self.flow_pressure_plot.setYRange(0, grafico_flujo_volumen_y, padding=0)
+        self.flow_pressure_plot.getViewBox().setLimits(xMin=-8, xMax= grafico_flujo_volumen_x, yMin=-8, yMax= grafico_flujo_volumen_y)
         self.flow_pressure_plot.getViewBox().setMouseEnabled(x=False, y=False)  # Deshabilitar zoom/pan
         
         # Configurar el fondo de los gráficos
@@ -105,9 +111,59 @@ class GraphHandler(QWidget):
             bounds=(0, 4)  # Limitar movimiento a rango X
         )
         
+        self.v_line_fvc = pg.InfiniteLine(
+            pos=1.5, 
+            angle=90, 
+            movable=True,
+            pen=pg.mkPen('r', width=2),
+            bounds=(0, 7)  # Limitar movimiento a rango X
+        )
+
+        self.v_line_pef = pg.InfiniteLine(
+            pos=0, 
+            angle=90, 
+            movable=True,
+            pen=pg.mkPen('b', width=2),
+            bounds=(0, 7)  # Limitar movimiento a rango X
+        )
+
+        self.v_line_fev025= pg.InfiniteLine(
+            pos=1, 
+            angle=90, 
+            movable=False,
+            pen=pg.mkPen('r', width=2),
+            bounds=(0, 7)  # Limitar movimiento a rango X
+        )
+
+        self.v_line_fev050 = pg.InfiniteLine(
+            pos=2, 
+            angle=90, 
+            movable=False,
+            pen=pg.mkPen('b', width=2),
+            bounds=(0, 7)  # Limitar movimiento a rango X
+        )
+
+        self.v_line_fev075 = pg.InfiniteLine(
+            pos=3, 
+            angle=90, 
+            movable=False,
+            pen=pg.mkPen('g', width=2),
+            bounds=(0, 7)  # Limitar movimiento a rango X
+        )
+
+        self.v_line_fvc = pg.InfiniteLine(
+            pos=4, 
+            angle=90, 
+            movable=True,
+            pen=pg.mkPen('r', width=2),
+            bounds=(0, 7)  # Limitar movimiento a rango X
+        )
+        
         # Crear etiquetas para las líneas
         self.label1 = pg.TextItem(text='', color='r', anchor=(0, 1))
         self.label2 = pg.TextItem(text='', color='g', anchor=(0, 1))
+        self.label3 = pg.TextItem(text='', color='g', anchor=(0, 1))
+        self.label4 = pg.TextItem(text='', color='g', anchor=(0, 1))
         
         # Crear etiqueta para la diferencia
         self.diff_label = pg.TextItem(text='', color='b', anchor=(0, 0))
@@ -115,13 +171,23 @@ class GraphHandler(QWidget):
         # Agregar las líneas y etiquetas al gráfico
         self.flow_time_plot.addItem(self.vLine1)
         self.flow_time_plot.addItem(self.vLine2)
+
         self.flow_time_plot.addItem(self.label1)
         self.flow_time_plot.addItem(self.label2)
         self.flow_time_plot.addItem(self.diff_label)
+
+
+        self.flow_pressure_plot.addItem(self.v_line_pef)
+        self.flow_pressure_plot.addItem(self.v_line_fev025)
+        self.flow_pressure_plot.addItem(self.v_line_fev050)
+        self.flow_pressure_plot.addItem(self.v_line_fev075)
+        self.flow_pressure_plot.addItem(self.v_line_fvc)
         
         # Conectar señales para actualizar cuando las líneas se muevan
         self.vLine1.sigPositionChanged.connect(self.update_line_info)
         self.vLine2.sigPositionChanged.connect(self.update_line_info)
+        self.v_line_pef.sigPositionChanged.connect(self.update_line_pef_fvc)
+        self.v_line_fvc.sigPositionChanged.connect(self.update_line_pef_fvc)
 
     def setup_curve_styles(self):
         """Configurar las curvas de los gráficos"""
@@ -168,6 +234,19 @@ class GraphHandler(QWidget):
 
         return None
 
+    def update_line_pef_fvc(self):
+        try:
+            pef = self.v_line_pef.value()
+            fvc = self.v_line_fvc.value()
+            #evitar que pef sea mayor a fvc
+            diff_4 = (fvc - pef)/4
+            self.v_line_fev025.setValue(pef + diff_4)
+            self.v_line_fev050.setValue(pef + diff_4*2)
+            self.v_line_fev075.setValue(pef + diff_4*3)
+            print(f"pef {pef} , fvc {fvc}, fev025 {self.v_line_fev025.setValue(pef + diff_4)}")
+
+        except:
+            pass
     def update_line_info(self):
         """Actualizar la información de las líneas"""
         try:
