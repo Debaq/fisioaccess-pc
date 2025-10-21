@@ -16,6 +16,7 @@ from utils.QRGenerator import QRGenerator, QRDisplayDialog
 import os
 from utils.PDFGenerator import PDFGenerator
 from ui.OpenStudyDialog import OpenStudyDialog
+from datetime import datetime
 
 
 
