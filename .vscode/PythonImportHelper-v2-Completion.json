@@ -256,6 +256,14 @@
         "documentation": {}
     },
     {
+        "label": "Qt",
+        "importPath": "PySide6.QtCore",
+        "description": "PySide6.QtCore",
+        "isExtraImport": true,
+        "detail": "PySide6.QtCore",
+        "documentation": {}
+    },
+    {
         "label": "serial",
         "kind": 6,
         "isExtraImport": true,
@@ -428,6 +436,14 @@
         "documentation": {}
     },
     {
+        "label": "QFont",
+        "importPath": "PySide6.QtGui",
+        "description": "PySide6.QtGui",
+        "isExtraImport": true,
+        "detail": "PySide6.QtGui",
+        "documentation": {}
+    },
+    {
         "label": "QApplication",
         "importPath": "PySide6.QtWidgets",
         "description": "PySide6.QtWidgets",
@@ -581,6 +597,38 @@
     },
     {
         "label": "QHBoxLayout",
+        "importPath": "PySide6.QtWidgets",
+        "description": "PySide6.QtWidgets",
+        "isExtraImport": true,
+        "detail": "PySide6.QtWidgets",
+        "documentation": {}
+    },
+    {
+        "label": "QVBoxLayout",
+        "importPath": "PySide6.QtWidgets",
+        "description": "PySide6.QtWidgets",
+        "isExtraImport": true,
+        "detail": "PySide6.QtWidgets",
+        "documentation": {}
+    },
+    {
+        "label": "QListWidget",
+        "importPath": "PySide6.QtWidgets",
+        "description": "PySide6.QtWidgets",
+        "isExtraImport": true,
+        "detail": "PySide6.QtWidgets",
+        "documentation": {}
+    },
+    {
+        "label": "QLabel",
+        "importPath": "PySide6.QtWidgets",
+        "description": "PySide6.QtWidgets",
+        "isExtraImport": true,
+        "detail": "PySide6.QtWidgets",
+        "documentation": {}
+    },
+    {
+        "label": "QFrame",
         "importPath": "PySide6.QtWidgets",
         "description": "PySide6.QtWidgets",
         "isExtraImport": true,
@@ -766,7 +814,7 @@
         "kind": 6,
         "importPath": "src.utils.GraphHandler",
         "description": "src.utils.GraphHandler",
-        "peekOfCode": "class GraphHandler(QWidget):\n    # Señal para notificar nueva grabación\n    new_recording_created = Signal(int, dict)  # (número_grabación, datos)\n    def __init__(self, parent=None):\n        super().__init__(parent)\n        # Configurar el layout principal\n        self.layout = QHBoxLayout(self)\n        self.layout.setSpacing(0)\n        self.layout.setContentsMargins(0, 0, 0, 0)\n        # Crear los gráficos",
+        "peekOfCode": "class GraphHandler(QWidget):\n    # Señal para notificar nueva grabación\n    new_recording_created = Signal(int, dict)\n    def __init__(self, parent=None):\n        super().__init__(parent)\n        # Layout principal horizontal\n        self.main_layout = QHBoxLayout(self)\n        self.main_layout.setSpacing(5)\n        self.main_layout.setContentsMargins(0, 0, 0, 0)\n        # Crear secciones",
         "detail": "src.utils.GraphHandler",
         "documentation": {}
     },

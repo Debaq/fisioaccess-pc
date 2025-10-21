@@ -1,22 +1,24 @@
 import pyqtgraph as pg
-from PySide6.QtWidgets import QWidget, QHBoxLayout
-from PySide6.QtCore import Slot, Signal
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QListWidget, QLabel, QFrame
+from PySide6.QtCore import Slot, Signal, Qt
+from PySide6.QtGui import QFont
 import numpy as np
 
 class GraphHandler(QWidget):
     # Señal para notificar nueva grabación
-    new_recording_created = Signal(int, dict)  # (número_grabación, datos)
+    new_recording_created = Signal(int, dict)
     
     def __init__(self, parent=None):
         super().__init__(parent)
         
-        # Configurar el layout principal
-        self.layout = QHBoxLayout(self)
-        self.layout.setSpacing(0)
-        self.layout.setContentsMargins(0, 0, 0, 0)
+        # Layout principal horizontal
+        self.main_layout = QHBoxLayout(self)
+        self.main_layout.setSpacing(5)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
         
-        # Crear los gráficos
-        self.setup_graphs()
+        # Crear secciones
+        self.setup_graphs_section()
+        self.setup_results_section()
 
         # Datos para visualización actual
         self.display_data = {
@@ -26,37 +28,36 @@ class GraphHandler(QWidget):
             'v': []
         }
 
-
         # Variables de grabación
         self.recording_started = False
         self.start_time = None
         self.recording_count = 0
         self.max_recordings = 9
-        self.recording_duration = 6.0  # Ajustar tiempo de duracion de la prueba
-        self.ready_for_new_recording = False  # Control manual de grabaciones
+        self.recording_duration = 6.0
+        self.ready_for_new_recording = False
         
         # Almacenar todas las grabaciones
         self.stored_recordings = []
         self.recording_colors = ['b', 'r', 'g', 'm', 'c', 'y', 'orange', 'purple', 'brown', 'pink']
         
-        # Configurar estilos de las curvas
-        self.setup_curve_styles()
-        
         # Curvas para grabaciones almacenadas
         self.stored_curves = []
 
-        # Agregar líneas verticales móviles
+        # Configurar estilos de las curvas
+        self.setup_curve_styles()
+        
+        # Agregar líneas verticales
         self.setup_vertical_lines()
 
         self.graph_record = True
     
-    def setup_graphs(self):
-        """Configurar los widgets de gráficos con escalas fijas"""
-        # Crear dos widgets de gráficos separados
-        self.flow_time_widget = pg.PlotWidget()
-        self.flow_pressure_widget = pg.PlotWidget()
+    def setup_graphs_section(self):
+        """Configurar sección de gráficos (centro)"""
+        graphs_layout = QHBoxLayout()
+        graphs_layout.setSpacing(5)
         
-        # Configurar el gráfico Volumen vs Tiempo (IZQUIERDO)
+        # Gráfico izquierdo: Volumen vs Tiempo
+        self.flow_time_widget = pg.PlotWidget()
         self.flow_time_plot = self.flow_time_widget.getPlotItem()
         self.flow_time_plot.setLabel('left', 'Volumen', 'L')
         self.flow_time_plot.setLabel('bottom', 'Tiempo', 's')
@@ -64,44 +65,84 @@ class GraphHandler(QWidget):
         
         grafico_volumen_tiempo_x = 17
         grafico_volumen_tiempo_y = 6
-        # ESCALA FIJA IZQUIERDO: Y: 0-4L, X: 0-4s
         self.flow_time_plot.setXRange(0, grafico_volumen_tiempo_x, padding=0)
         self.flow_time_plot.setYRange(-4, grafico_volumen_tiempo_y, padding=0)
         self.flow_time_plot.getViewBox().setLimits(xMin=0, xMax=grafico_volumen_tiempo_x, yMin=-4, yMax=grafico_volumen_tiempo_y)
-        self.flow_time_plot.getViewBox().setMouseEnabled(x=False, y=False)  # Deshabilitar zoom/pan
+        self.flow_time_plot.getViewBox().setMouseEnabled(x=False, y=False)
+        self.flow_time_widget.setBackground('w')
         
-        # Configurar el gráfico Flujo vs Volumen (DERECHO)
+        # Gráfico derecho: Flujo vs Volumen
+        self.flow_pressure_widget = pg.PlotWidget()
         self.flow_pressure_plot = self.flow_pressure_widget.getPlotItem()
         self.flow_pressure_plot.setLabel('left', 'Flujo', 'L/s')
         self.flow_pressure_plot.setLabel('bottom', 'Volumen', 'L')
         self.flow_pressure_plot.showGrid(x=True, y=True)
         
-
         grafico_flujo_volumen_x = 8
         grafico_flujo_volumen_y = 10
-        # ESCALA FIJA DERECHO: Y: -8 a 8 L/s, X: -1 a 4 L
         self.flow_pressure_plot.setXRange(0, grafico_flujo_volumen_x, padding=0)
         self.flow_pressure_plot.setYRange(0, grafico_flujo_volumen_y, padding=0)
-        self.flow_pressure_plot.getViewBox().setLimits(xMin=-8, xMax= grafico_flujo_volumen_x, yMin=-8, yMax= grafico_flujo_volumen_y)
-        self.flow_pressure_plot.getViewBox().setMouseEnabled(x=False, y=False)  # Deshabilitar zoom/pan
-        
-        # Configurar el fondo de los gráficos
-        self.flow_time_widget.setBackground('w')
+        self.flow_pressure_plot.getViewBox().setLimits(xMin=-8, xMax=grafico_flujo_volumen_x, yMin=-8, yMax=grafico_flujo_volumen_y)
+        self.flow_pressure_plot.getViewBox().setMouseEnabled(x=False, y=False)
         self.flow_pressure_widget.setBackground('w')
         
-        # Agregar los widgets al layout con la proporción correcta
-        self.layout.addWidget(self.flow_time_widget, stretch=2)
-        self.layout.addWidget(self.flow_pressure_widget, stretch=1)
-
+        # Agregar gráficos al layout
+        graphs_layout.addWidget(self.flow_time_widget, stretch=2)
+        graphs_layout.addWidget(self.flow_pressure_widget, stretch=1)
+        
+        self.main_layout.addLayout(graphs_layout, stretch=3)
+    
+    def setup_results_section(self):
+        """Configurar sección de resultados (derecha)"""
+        results_frame = QFrame()
+        results_frame.setFrameShape(QFrame.StyledPanel)
+        results_frame.setMaximumWidth(250)
+        results_frame.setMinimumWidth(200)
+        
+        results_layout = QVBoxLayout(results_frame)
+        results_layout.setSpacing(5)
+        results_layout.setContentsMargins(5, 5, 5, 5)
+        
+        # Título
+        title_label = QLabel("Resultados")
+        title_font = QFont()
+        title_font.setBold(True)
+        title_font.setPointSize(12)
+        title_label.setFont(title_font)
+        title_label.setAlignment(Qt.AlignCenter)
+        results_layout.addWidget(title_label)
+        
+        # Separador
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setFrameShadow(QFrame.Sunken)
+        results_layout.addWidget(line)
+        
+        # Lista de resultados
+        self.results_list = QListWidget()
+        self.results_list.setFont(QFont("Monospace", 10))
+        results_layout.addWidget(self.results_list)
+        
+        # Agregar valores iniciales
+        self.update_results_display()
+        
+        self.main_layout.addWidget(results_frame, stretch=1)
+    
     def setup_vertical_lines(self):
-        """Configurar las líneas verticales móviles"""
-        # Crear las líneas verticales para el gráfico Volumen vs Tiempo
+        """Configurar las líneas verticales con identificadores simples"""
+        # Gráfico izquierdo: solo FEV1 (líneas 1 y 2)
         self.vLine1 = pg.InfiniteLine(
             pos=0.5, 
             angle=90, 
             movable=True,
             pen=pg.mkPen('r', width=2),
-            bounds=(0, 16)
+            bounds=(0, 16),
+            label="1",
+            labelOpts={
+                "position": 0.95,
+                "color": (255, 0, 0),
+                "fill": (255, 255, 255, 200)
+            }
         )
         self.vLine1.setZValue(10)
         
@@ -110,25 +151,29 @@ class GraphHandler(QWidget):
             angle=90, 
             movable=True,
             pen=pg.mkPen('g', width=2),
-            bounds=(0, 16)
+            bounds=(0, 16),
+            label="2",
+            labelOpts={
+                "position": 0.95,
+                "color": (0, 255, 0),
+                "fill": (255, 255, 255, 200)
+            }
         )
-        self.vLine2.setZValue(0)
+        self.vLine2.setZValue(10)
         
-        # Crear líneas para el gráfico Flujo vs Volumen con labels mejorados
+        # Gráfico derecho: líneas PEF, FEF y FVC con identificadores
         self.v_line_pef = pg.InfiniteLine(
             pos=0, 
             angle=90, 
             movable=True,
             pen=pg.mkPen('b', width=2),
-            label="PEF: 0.00 L/s",
+            bounds=(0, 7),
+            label="A",
             labelOpts={
-                "movable": True, 
-                "position": 0.95, 
+                "position": 0.95,
                 "color": (0, 0, 255),
-                "fill": (255, 255, 255, 200),
-                "border": (0, 0, 255)
-            },
-            bounds=(0, 7)
+                "fill": (255, 255, 255, 200)
+            }
         )
         self.v_line_pef.setZValue(10)
 
@@ -137,15 +182,13 @@ class GraphHandler(QWidget):
             angle=90, 
             movable=False,
             pen=pg.mkPen('r', width=2),
-            label="FEF25: 0.00 L/s",
+            bounds=(0, 7),
+            label="B",
             labelOpts={
-                "movable": True, 
-                "position": 0.85, 
+                "position": 0.85,
                 "color": (255, 0, 0),
-                "fill": (255, 255, 255, 200),
-                "border": (255, 0, 0)
-            },
-            bounds=(0, 7)
+                "fill": (255, 255, 255, 200)
+            }
         )
         self.v_line_fef025.setZValue(10)
 
@@ -154,15 +197,13 @@ class GraphHandler(QWidget):
             angle=90, 
             movable=False,
             pen=pg.mkPen('b', width=2),
-            label="FEF50: 0.00 L/s",
+            bounds=(0, 7),
+            label="C",
             labelOpts={
-                "movable": True, 
-                "position": 0.75, 
+                "position": 0.75,
                 "color": (0, 0, 255),
-                "fill": (255, 255, 255, 200),
-                "border": (0, 0, 255)
-            },
-            bounds=(0, 7)
+                "fill": (255, 255, 255, 200)
+            }
         )
         self.v_line_fef050.setZValue(10)
 
@@ -171,15 +212,13 @@ class GraphHandler(QWidget):
             angle=90, 
             movable=False,
             pen=pg.mkPen('g', width=2),
-            label="FEF75: 0.00 L/s",
+            bounds=(0, 7),
+            label="D",
             labelOpts={
-                "movable": True, 
-                "position": 0.65, 
+                "position": 0.65,
                 "color": (0, 255, 0),
-                "fill": (255, 255, 255, 200),
-                "border": (0, 255, 0)
-            },
-            bounds=(0, 7)
+                "fill": (255, 255, 255, 200)
+            }
         )
         self.v_line_fef075.setZValue(10)
 
@@ -188,31 +227,20 @@ class GraphHandler(QWidget):
             angle=90, 
             movable=True,
             pen=pg.mkPen('r', width=2),
-            label="FVC: 0.00 L",
+            bounds=(0, 7),
+            label="E",
             labelOpts={
-                "movable": True, 
-                "position": 0.55, 
+                "position": 0.55,
                 "color": (255, 0, 0),
-                "fill": (255, 255, 255, 200),
-                "border": (255, 0, 0)
-            },
-            bounds=(0, 7)
+                "fill": (255, 255, 255, 200)
+            }
         )
         self.v_line_fvc.setZValue(10)
         
-        # Crear etiquetas para el gráfico izquierdo
-        self.label1 = pg.TextItem(text='', color='r', anchor=(0, 1))
-        self.label2 = pg.TextItem(text='', color='g', anchor=(0, 1))
-        self.diff_label = pg.TextItem(text='', color='b', anchor=(0, 0))
-        
-        # Agregar al gráfico izquierdo
+        # Agregar líneas a los gráficos
         self.flow_time_plot.addItem(self.vLine1)
         self.flow_time_plot.addItem(self.vLine2)
-        self.flow_time_plot.addItem(self.label1)
-        self.flow_time_plot.addItem(self.label2)
-        self.flow_time_plot.addItem(self.diff_label)
-
-        # Agregar al gráfico derecho
+        
         self.flow_pressure_plot.addItem(self.v_line_pef)
         self.flow_pressure_plot.addItem(self.v_line_fef025)
         self.flow_pressure_plot.addItem(self.v_line_fef050)
@@ -220,12 +248,10 @@ class GraphHandler(QWidget):
         self.flow_pressure_plot.addItem(self.v_line_fvc)
         
         # Conectar señales
-        self.vLine1.sigPositionChanged.connect(self.update_line_info)
-        self.vLine2.sigPositionChanged.connect(self.update_line_info)
+        self.vLine1.sigPositionChanged.connect(self.update_results_display)
+        self.vLine2.sigPositionChanged.connect(self.update_results_display)
         self.v_line_pef.sigPositionChanged.connect(self.update_line_pef_fvc)
         self.v_line_fvc.sigPositionChanged.connect(self.update_line_pef_fvc)
-    
-
 
     def get_flow_at_volume(self, volume_pos):
         """Obtener el valor de flujo en una posición de volumen específica"""
@@ -235,11 +261,9 @@ class GraphHandler(QWidget):
         v_data = np.array(self.display_data['v'])
         f_data = np.array(self.display_data['f'])
 
-        # Verificar rango
         if volume_pos < v_data.min() or volume_pos > v_data.max():
             return None
 
-        # Interpolación
         idx = np.searchsorted(v_data, volume_pos)
         if idx > 0 and idx < len(v_data):
             v0, v1 = v_data[idx-1], v_data[idx]
@@ -253,21 +277,11 @@ class GraphHandler(QWidget):
 
         return None
 
-
-
     def setup_curve_styles(self):
         """Configurar las curvas de los gráficos"""
-        # Curva actual para Volumen vs Tiempo (línea sólida azul)
-        self.flow_time_curve = self.flow_time_plot.plot(
-            pen=pg.mkPen('b', width=3)
-        )
+        self.flow_time_curve = self.flow_time_plot.plot(pen=pg.mkPen('b', width=3))
+        self.flow_pressure_curve = self.flow_pressure_plot.plot(pen=pg.mkPen('r', width=3))
         
-        # Curva actual para Flujo vs Volumen (línea sólida roja)
-        self.flow_pressure_curve = self.flow_pressure_plot.plot(
-            pen=pg.mkPen('r', width=3)
-        )
-        
-        # Configurar el color de las etiquetas y ejes
         for plot in [self.flow_time_plot, self.flow_pressure_plot]:
             plot.getAxis('bottom').setPen('k')
             plot.getAxis('left').setPen('k')
@@ -282,11 +296,9 @@ class GraphHandler(QWidget):
         x_data = np.array(self.display_data['t'])
         y_data = np.array(self.display_data['v'])
 
-        # Verificar rango
         if x_pos < x_data[0] or x_pos > x_data[-1]:
             return None
 
-        # Interpolación
         idx = np.searchsorted(x_data, x_pos)
         if idx > 0 and idx < len(x_data):
             x0, x1 = x_data[idx-1], x_data[idx]
@@ -301,113 +313,92 @@ class GraphHandler(QWidget):
         return None
 
     def update_line_pef_fvc(self):
-        """Actualizar las líneas FEF y sus labels con valores calculados"""
+        """Actualizar las líneas FEF cuando cambian PEF o FVC"""
         try:
             pef_vol = self.v_line_pef.value()
             fvc_vol = self.v_line_fvc.value()
             
-            # Calcular PEF (flujo máximo en esa posición)
-            pef_flow = self.get_flow_at_volume(pef_vol)
-            if pef_flow is not None:
-                self.v_line_pef.label.setFormat(f"PEF: {pef_flow:.2f} L/s")
-            
-            # FVC es simplemente el volumen
-            self.v_line_fvc.label.setFormat(f"FVC: {fvc_vol:.2f} L")
-            
-            # Calcular posiciones de FEF25, FEF50, FEF75
+            # Calcular posiciones de FEF
             diff = (fvc_vol - pef_vol) / 4
             
-            fef25_vol = pef_vol + diff
-            fef50_vol = pef_vol + diff * 2
-            fef75_vol = pef_vol + diff * 3
+            self.v_line_fef025.setValue(pef_vol + diff)
+            self.v_line_fef050.setValue(pef_vol + diff * 2)
+            self.v_line_fef075.setValue(pef_vol + diff * 3)
             
-            # Actualizar posiciones
-            self.v_line_fef025.setValue(fef25_vol)
-            self.v_line_fef050.setValue(fef50_vol)
-            self.v_line_fef075.setValue(fef75_vol)
-            
-            # Calcular flujos en cada posición
-            fef25_flow = self.get_flow_at_volume(fef25_vol)
-            fef50_flow = self.get_flow_at_volume(fef50_vol)
-            fef75_flow = self.get_flow_at_volume(fef75_vol)
-            
-            # Actualizar labels
-            if fef25_flow is not None:
-                self.v_line_fef025.label.setFormat(f"FEF25: {fef25_flow:.2f} L/s")
-            if fef50_flow is not None:
-                self.v_line_fef050.label.setFormat(f"FEF50: {fef50_flow:.2f} L/s")
-            if fef75_flow is not None:
-                self.v_line_fef075.label.setFormat(f"FEF75: {fef75_flow:.2f} L/s")
+            # Actualizar display de resultados
+            self.update_results_display()
                 
         except Exception as e:
             print(f"Error actualizando líneas PEF/FVC: {e}")
+
+    def update_results_display(self):
+        """Actualizar la lista de resultados"""
+        self.results_list.clear()
         
-        
-        
-    def update_line_info(self):
-        """Actualizar la información de las líneas"""
         try:
-            # Obtener valores x
+            # Gráfico izquierdo (Volumen vs Tiempo)
+            self.results_list.addItem("=== Gráfico 1 ===")
+            
             x1 = self.vLine1.value()
             x2 = self.vLine2.value()
-            
-            # Obtener valores y
             y1 = self.get_y_value_at_x(x1)
             y2 = self.get_y_value_at_x(x2)
-
-            # Actualizar etiquetas de líneas
-            if y1 is not None:
-                self.label1.setPos(x1, y1)
-                self.label1.setText(f'X: {x1:.2f}\nY: {y1:.2f}')
             
-            if y2 is not None:
-                self.label2.setPos(x2, y2)
-                self.label2.setText(f'X: {x2:.2f}\nY: {y2:.2f}')
-
-            # Actualizar etiqueta de diferencia
             if y1 is not None and y2 is not None:
-                x_diff = abs(x2 - x1)
-                y_diff = abs(y2 - y1)
-                x_mid = min(x1, x2) + x_diff/2
-                y_position = 3.5  # Posición fija cerca del tope
+                fev1 = abs(y2 - y1)
+                self.results_list.addItem(f"Línea 1: {x1:.2f} s")
+                self.results_list.addItem(f"Línea 2: {x2:.2f} s")
+                self.results_list.addItem(f"FEV1: {fev1:.2f} L")
+                self.results_list.addItem("")
+            
+            # Gráfico derecho (Flujo vs Volumen)
+            self.results_list.addItem("=== Gráfico 2 ===")
+            
+            pef_vol = self.v_line_pef.value()
+            fvc_vol = self.v_line_fvc.value()
+            
+            pef_flow = self.get_flow_at_volume(pef_vol)
+            fef25_flow = self.get_flow_at_volume(self.v_line_fef025.value())
+            fef50_flow = self.get_flow_at_volume(self.v_line_fef050.value())
+            fef75_flow = self.get_flow_at_volume(self.v_line_fef075.value())
+            
+            if pef_flow is not None:
+                self.results_list.addItem(f"A - PEF: {pef_flow:.2f} L/s")
+            if fef25_flow is not None:
+                self.results_list.addItem(f"B - FEF25: {fef25_flow:.2f} L/s")
+            if fef50_flow is not None:
+                self.results_list.addItem(f"C - FEF50: {fef50_flow:.2f} L/s")
+            if fef75_flow is not None:
+                self.results_list.addItem(f"D - FEF75: {fef75_flow:.2f} L/s")
+            
+            self.results_list.addItem(f"E - FVC: {fvc_vol:.2f} L")
+            
+            # Calcular FEV1/FVC si hay datos
+            if y1 is not None and y2 is not None and fvc_vol > 0:
+                fev1 = abs(y2 - y1)
+                ratio = (fev1 / fvc_vol) * 100
+                self.results_list.addItem("")
+                self.results_list.addItem(f"FEV1/FVC: {ratio:.1f}%")
                 
-                self.diff_label.setPos(x_mid, y_position)
-                self.diff_label.setText(
-                    f'ΔX: {x_diff:.2f} s\n'
-                    f'ΔY: {y_diff:.2f} L'
-                )
         except Exception as e:
-            print(f"Error actualizando líneas: {e}")
-
+            print(f"Error actualizando resultados: {e}")
 
     def prepare_new_recording(self):
-        """Preparar el sistema para una nueva grabación - llamar ANTES de reset hardware"""
+        """Preparar el sistema para una nueva grabación"""
         if self.recording_count >= self.max_recordings:
-            print(f"No se pueden crear más grabaciones. Máximo: {self.max_recordings}")
             return False
         
         if self.recording_started:
-            print("Ya hay una grabación en curso")
             return False
         
-        # Limpiar datos de display
-        self.display_data = {
-            't': [],
-            'p': [],
-            'f': [],
-            'v': []
-        }
-        
-        # Resetear variables de control
+        self.display_data = {'t': [], 'p': [], 'f': [], 'v': []}
         self.recording_started = False
-        self.start_time = None  # ← CRÍTICO: resetear para que tome el nuevo timestamp
+        self.start_time = None
         self.ready_for_new_recording = True
         
-        # Limpiar último timestamp para detección de reset
         if hasattr(self, 'last_timestamp'):
             delattr(self, 'last_timestamp')
         
-        print(f"Sistema preparado para grabación {self.recording_count + 1}")
         return True
 
     def store_current_recording(self):
@@ -423,28 +414,21 @@ class GraphHandler(QWidget):
                 }
             }
             self.stored_recordings.append(recording_data)
-            
-            # Agregar curva permanente al gráfico
             self.add_permanent_curve(recording_data)
             
-            # AJUSTAR AUTOMÁTICAMENTE LOS GRÁFICOS
             self.flow_time_plot.autoRange()
             self.flow_pressure_plot.autoRange()
             
-            # Emitir señal de nueva grabación
             self.new_recording_created.emit(
                 recording_data['recording_number'], 
                 recording_data['data']
             )
-            
-            print(f"Grabación {recording_data['recording_number']} almacenada y señal emitida")
 
     def add_permanent_curve(self, recording_data):
         """Agregar curva permanente de la grabación al gráfico"""
         color_idx = (recording_data['recording_number'] - 1) % len(self.recording_colors)
         color = self.recording_colors[color_idx]
         
-        # Curva en gráfico tiempo-volumen (línea punteada)
         curve_time = self.flow_time_plot.plot(
             x=recording_data['data']['t'],
             y=recording_data['data']['v'],
@@ -452,7 +436,6 @@ class GraphHandler(QWidget):
             name=f'Grabación {recording_data["recording_number"]}'
         )
         
-        # Curva en gráfico volumen-flujo (si hay datos de flujo)
         curve_pressure = None
         if recording_data['data']['f']:
             curve_pressure = self.flow_pressure_plot.plot(
@@ -470,34 +453,25 @@ class GraphHandler(QWidget):
 
     def delete_recording(self, recording_number):
         """Eliminar grabación específica por número"""
-        # 1. Buscar y eliminar de stored_recordings
         for i, recording in enumerate(self.stored_recordings):
             if recording['recording_number'] == recording_number:
                 del self.stored_recordings[i]
                 break
         else:
-            print(f"Grabación {recording_number} no encontrada")
             return False
 
-        # 2. Limpiar completamente ambos gráficos
         self.flow_time_plot.clear()
         self.flow_pressure_plot.clear()
-
-        # 3. Limpiar listas
         self.stored_curves = []
 
-        # 4. Recrear solo las grabaciones restantes
         for recording in self.stored_recordings:
             self.add_permanent_curve(recording)
             
         self.display_data = {'t': [], 'p': [], 'f': [], 'v': []}
-
-        # 5. Recrear curvas actuales (si hay datos)
         self.setup_curve_styles()
         self.setup_vertical_lines()
         self.update_plots()
 
-        print(f"Grabación {recording_number} eliminada")
         return True
 
     def get_recording_list(self):
@@ -510,18 +484,10 @@ class GraphHandler(QWidget):
 
     def reset_data(self):
         """Reset manual - usado después de calibración"""
-        self.display_data = {
-            't': [],
-            'p': [],
-            'f': [],
-            'v': []
-        }
-        
-        # Resetear variables de grabación después de calibración
+        self.display_data = {'t': [], 'p': [], 'f': [], 'v': []}
         self.recording_started = False
         self.start_time = None
         self.ready_for_new_recording = False
-        print("DEBUG: reset_data() - Variables de grabación reseteadas")
 
     @Slot(dict)
     def update_data(self, new_data):
@@ -534,37 +500,27 @@ class GraphHandler(QWidget):
 
             volume = new_data.get('v', 0)
             t_raw = new_data.get('t', 0)
-
-            # Actualizar último timestamp
             self.last_timestamp = t_raw
 
-            # Si aún no ha empezado a grabar, esperar volumen positivo Y activación manual
             if not self.recording_started:
-                if volume > 0.01 and self.ready_for_new_recording:  # Umbral pequeño
+                if volume > 0.01 and self.ready_for_new_recording:
                     self.recording_started = True
                     self.start_time = t_raw
-                    print(f"DEBUG: Grabación {self.recording_count + 1} iniciada con start_time={self.start_time}")
                 return
 
-            # ---------- grabación activa ----------
             t_rel = (t_raw - self.start_time) / 1000.0
 
-            # Si tiempo negativo, hay un problema de sincronización
             if t_rel < 0:
-                print(f"ADVERTENCIA: Tiempo negativo {t_rel} - dato descartado")
                 return
 
-            # Verificar duración
             if t_rel >= self.recording_duration:
                 self.store_current_recording()
                 self.recording_started = False
                 self.start_time = None
                 self.ready_for_new_recording = False
                 self.recording_count += 1
-                print(f"Grabación completada. Total: {self.recording_count}/{self.max_recordings}")
                 return
 
-            # Agregar datos
             self.display_data['t'].append(t_rel)
             self.display_data['v'].append(volume)
 
@@ -576,12 +532,10 @@ class GraphHandler(QWidget):
 
         except Exception as e:
             print(f"Error en update_data: {e}")
-        
 
     def update_plots(self):
         """Actualizar ambos gráficos"""
         if len(self.display_data['t']) > 0:
-            # Actualizar curva actual (línea sólida)
             self.flow_time_curve.setData(
                 x=self.display_data['t'],
                 y=self.display_data['v']
@@ -591,21 +545,18 @@ class GraphHandler(QWidget):
                     x=self.display_data['v'],
                     y=self.display_data['f']
                 )
-            self.update_line_info()
+            self.update_results_display()
 
     def clear_data(self):
         """Limpiar todo - datos actuales y grabaciones"""
-        # Limpiar datos actuales
         for key in self.display_data:
             self.display_data[key] = []
 
-        # Limpiar grabaciones almacenadas
         for curve_data in self.stored_curves:
             self.flow_time_plot.removeItem(curve_data['curve_time'])
             if curve_data['curve_pressure']:
                 self.flow_pressure_plot.removeItem(curve_data['curve_pressure'])
 
-        # Resetear variables
         self.start_time = None
         self.recording_started = False
         self.recording_count = 0
@@ -613,17 +564,13 @@ class GraphHandler(QWidget):
         self.stored_recordings = []
         self.stored_curves = []
 
-        # Limpiar curvas actuales
         self.update_plots()
 
-        # Resetear líneas verticales
         self.vLine1.setValue(0.5)
         self.vLine2.setValue(1.5)
-        self.label1.setText('')
-        self.label2.setText('')
-        self.diff_label.setText('')
-
+        
         self.graph_record = True
+        self.update_results_display()
 
     def stop_record(self):
         """Detener grabación"""
