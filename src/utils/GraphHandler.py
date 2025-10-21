@@ -101,103 +101,159 @@ class GraphHandler(QWidget):
             angle=90, 
             movable=True,
             pen=pg.mkPen('r', width=2),
-            bounds=(0, 16)  # Limitar movimiento a rango X
+            bounds=(0, 16)
         )
+        self.vLine1.setZValue(10)
+        
         self.vLine2 = pg.InfiniteLine(
             pos=1.5, 
             angle=90, 
             movable=True,
             pen=pg.mkPen('g', width=2),
-            bounds=(0, 16)  # Limitar movimiento a rango X
+            bounds=(0, 16)
         )
+        self.vLine2.setZValue(0)
         
-        self.v_line_fvc = pg.InfiniteLine(
-            pos=1.5, 
-            angle=90, 
-            movable=True,
-            pen=pg.mkPen('r', width=2),
-            bounds=(0, 7)  # Limitar movimiento a rango X
-        )
-
+        # Crear líneas para el gráfico Flujo vs Volumen con labels mejorados
         self.v_line_pef = pg.InfiniteLine(
             pos=0, 
             angle=90, 
             movable=True,
             pen=pg.mkPen('b', width=2),
-            label="PEF",
-            labelOpts={"movable":True, "position":0.8, "color":(250, 0, 0)},
-            bounds=(0, 7)  # Limitar movimiento a rango X
+            label="PEF: 0.00 L/s",
+            labelOpts={
+                "movable": True, 
+                "position": 0.95, 
+                "color": (0, 0, 255),
+                "fill": (255, 255, 255, 200),
+                "border": (0, 0, 255)
+            },
+            bounds=(0, 7)
         )
+        self.v_line_pef.setZValue(10)
 
-        self.v_line_fev025= pg.InfiniteLine(
+        self.v_line_fef025 = pg.InfiniteLine(
             pos=1, 
             angle=90, 
             movable=False,
             pen=pg.mkPen('r', width=2),
-            label="fef025",
-            labelOpts={"movable":True, "position":0.8, "color":(250, 0, 0)},
-            bounds=(0, 7)  # Limitar movimiento a rango X
+            label="FEF25: 0.00 L/s",
+            labelOpts={
+                "movable": True, 
+                "position": 0.85, 
+                "color": (255, 0, 0),
+                "fill": (255, 255, 255, 200),
+                "border": (255, 0, 0)
+            },
+            bounds=(0, 7)
         )
-        #self.text_line_fev025 = pg.InfLineLabel(self.v_line_fev025, text="FEV025", movable=True, position=0.5)
+        self.v_line_fef025.setZValue(10)
 
-        self.v_line_fev050 = pg.InfiniteLine(
+        self.v_line_fef050 = pg.InfiniteLine(
             pos=2, 
             angle=90, 
             movable=False,
             pen=pg.mkPen('b', width=2),
-            label="fef050",
-            labelOpts={"movable":True, "position":0.8, "color":(250, 0, 0)},
-            bounds=(0, 7)  # Limitar movimiento a rango X
+            label="FEF50: 0.00 L/s",
+            labelOpts={
+                "movable": True, 
+                "position": 0.75, 
+                "color": (0, 0, 255),
+                "fill": (255, 255, 255, 200),
+                "border": (0, 0, 255)
+            },
+            bounds=(0, 7)
         )
+        self.v_line_fef050.setZValue(10)
 
-        self.v_line_fev075 = pg.InfiniteLine(
+        self.v_line_fef075 = pg.InfiniteLine(
             pos=3, 
             angle=90, 
             movable=False,
             pen=pg.mkPen('g', width=2),
-            label="fef075",
-            labelOpts={"movable":True, "position":0.8, "color":(250, 0, 0)},
-            bounds=(0, 7)  # Limitar movimiento a rango X
+            label="FEF75: 0.00 L/s",
+            labelOpts={
+                "movable": True, 
+                "position": 0.65, 
+                "color": (0, 255, 0),
+                "fill": (255, 255, 255, 200),
+                "border": (0, 255, 0)
+            },
+            bounds=(0, 7)
         )
+        self.v_line_fef075.setZValue(10)
 
         self.v_line_fvc = pg.InfiniteLine(
             pos=4, 
             angle=90, 
             movable=True,
             pen=pg.mkPen('r', width=2),
-            label="FVC",
-            labelOpts={"movable":True, "position":0.8, "color":(250, 0, 0)},
-            bounds=(0, 7)  # Limitar movimiento a rango X
+            label="FVC: 0.00 L",
+            labelOpts={
+                "movable": True, 
+                "position": 0.55, 
+                "color": (255, 0, 0),
+                "fill": (255, 255, 255, 200),
+                "border": (255, 0, 0)
+            },
+            bounds=(0, 7)
         )
+        self.v_line_fvc.setZValue(10)
         
-        # Crear etiquetas para las líneas
+        # Crear etiquetas para el gráfico izquierdo
         self.label1 = pg.TextItem(text='', color='r', anchor=(0, 1))
         self.label2 = pg.TextItem(text='', color='g', anchor=(0, 1))
-        
-
-        # Crear etiqueta para la diferencia
         self.diff_label = pg.TextItem(text='', color='b', anchor=(0, 0))
         
-        # Agregar las líneas y etiquetas al gráfico
+        # Agregar al gráfico izquierdo
         self.flow_time_plot.addItem(self.vLine1)
         self.flow_time_plot.addItem(self.vLine2)
-
         self.flow_time_plot.addItem(self.label1)
         self.flow_time_plot.addItem(self.label2)
         self.flow_time_plot.addItem(self.diff_label)
 
-
+        # Agregar al gráfico derecho
         self.flow_pressure_plot.addItem(self.v_line_pef)
-        self.flow_pressure_plot.addItem(self.v_line_fev025)
-        self.flow_pressure_plot.addItem(self.v_line_fev050)
-        self.flow_pressure_plot.addItem(self.v_line_fev075)
+        self.flow_pressure_plot.addItem(self.v_line_fef025)
+        self.flow_pressure_plot.addItem(self.v_line_fef050)
+        self.flow_pressure_plot.addItem(self.v_line_fef075)
         self.flow_pressure_plot.addItem(self.v_line_fvc)
         
-        # Conectar señales para actualizar cuando las líneas se muevan
+        # Conectar señales
         self.vLine1.sigPositionChanged.connect(self.update_line_info)
         self.vLine2.sigPositionChanged.connect(self.update_line_info)
         self.v_line_pef.sigPositionChanged.connect(self.update_line_pef_fvc)
         self.v_line_fvc.sigPositionChanged.connect(self.update_line_pef_fvc)
+    
+
+
+    def get_flow_at_volume(self, volume_pos):
+        """Obtener el valor de flujo en una posición de volumen específica"""
+        if not self.display_data['v'] or not self.display_data['f']:
+            return None
+
+        v_data = np.array(self.display_data['v'])
+        f_data = np.array(self.display_data['f'])
+
+        # Verificar rango
+        if volume_pos < v_data.min() or volume_pos > v_data.max():
+            return None
+
+        # Interpolación
+        idx = np.searchsorted(v_data, volume_pos)
+        if idx > 0 and idx < len(v_data):
+            v0, v1 = v_data[idx-1], v_data[idx]
+            f0, f1 = f_data[idx-1], f_data[idx]
+            
+            if v1 == v0:
+                return f0
+                
+            f_interp = f0 + (f1 - f0) * (volume_pos - v0) / (v1 - v0)
+            return f_interp
+
+        return None
+
+
 
     def setup_curve_styles(self):
         """Configurar las curvas de los gráficos"""
@@ -245,20 +301,49 @@ class GraphHandler(QWidget):
         return None
 
     def update_line_pef_fvc(self):
+        """Actualizar las líneas FEF y sus labels con valores calculados"""
         try:
-            pef = self.v_line_pef.value()
-            fvc = self.v_line_fvc.value()
-            #evitar que pef sea mayor a fvc
-            diff_4 = (fvc - pef)/4
-            self.v_line_fev025.setValue(pef + diff_4)
-            self.v_line_fev050.setValue(pef + diff_4*2)
-            self.v_line_fev075.setValue(pef + diff_4*3)
-            print(f"pef {pef} , fvc {fvc}, fev025 {self.v_line_fev025.setValue(pef + diff_4)}")
+            pef_vol = self.v_line_pef.value()
+            fvc_vol = self.v_line_fvc.value()
             
-            #self.text_line_fev025.setFormat(f"fev025: {self.v_line_fev025.value()}")
-
-        except:
-            pass
+            # Calcular PEF (flujo máximo en esa posición)
+            pef_flow = self.get_flow_at_volume(pef_vol)
+            if pef_flow is not None:
+                self.v_line_pef.label.setFormat(f"PEF: {pef_flow:.2f} L/s")
+            
+            # FVC es simplemente el volumen
+            self.v_line_fvc.label.setFormat(f"FVC: {fvc_vol:.2f} L")
+            
+            # Calcular posiciones de FEF25, FEF50, FEF75
+            diff = (fvc_vol - pef_vol) / 4
+            
+            fef25_vol = pef_vol + diff
+            fef50_vol = pef_vol + diff * 2
+            fef75_vol = pef_vol + diff * 3
+            
+            # Actualizar posiciones
+            self.v_line_fef025.setValue(fef25_vol)
+            self.v_line_fef050.setValue(fef50_vol)
+            self.v_line_fef075.setValue(fef75_vol)
+            
+            # Calcular flujos en cada posición
+            fef25_flow = self.get_flow_at_volume(fef25_vol)
+            fef50_flow = self.get_flow_at_volume(fef50_vol)
+            fef75_flow = self.get_flow_at_volume(fef75_vol)
+            
+            # Actualizar labels
+            if fef25_flow is not None:
+                self.v_line_fef025.label.setFormat(f"FEF25: {fef25_flow:.2f} L/s")
+            if fef50_flow is not None:
+                self.v_line_fef050.label.setFormat(f"FEF50: {fef50_flow:.2f} L/s")
+            if fef75_flow is not None:
+                self.v_line_fef075.label.setFormat(f"FEF75: {fef75_flow:.2f} L/s")
+                
+        except Exception as e:
+            print(f"Error actualizando líneas PEF/FVC: {e}")
+        
+        
+        
     def update_line_info(self):
         """Actualizar la información de las líneas"""
         try:
@@ -324,6 +409,10 @@ class GraphHandler(QWidget):
             
             # Agregar curva permanente al gráfico
             self.add_permanent_curve(recording_data)
+            
+            # AJUSTAR AUTOMÁTICAMENTE LOS GRÁFICOS
+            self.flow_time_plot.autoRange()
+            self.flow_pressure_plot.autoRange()
             
             # Emitir señal de nueva grabación
             self.new_recording_created.emit(
