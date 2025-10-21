@@ -636,7 +636,7 @@ class MainWindow(QMainWindow, Ui_Main):
             return
         
         try:
-            # Generar archivo RAW
+            # 1. GENERAR ARCHIVO RAW
             self.statusbar.showMessage("Generando archivo de datos...")
             raw_path = self.file_handler.generate_raw_file(
                 self.graph_handler,
@@ -647,42 +647,45 @@ class MainWindow(QMainWindow, Ui_Main):
                 self.statusbar.showMessage("Error al generar archivo de datos")
                 return
             
-            # Verificar conectividad
+            # 2. GENERAR PDF (SIEMPRE, independiente de conexión)
+            self.statusbar.showMessage("Generando PDF...")
+            pdf_generator = PDFGenerator()
+            study_data_complete = self.get_study_data_for_pdf()
+
+            # Agregar los datos del paciente y análisis
+            study_data_complete['patient'] = patient_data
+            study_data_complete['analysis'] = {
+                'interpretacion': patient_data.get('interpretacion', ''),
+                'conclusion': patient_data.get('conclusion', '')
+            }
+            study_data_complete['timestamp'] = datetime.now().isoformat()
+
+            # Generar PDF
+            pdf_path = pdf_generator.generate_pdf(study_data_complete)
+            
+            if not pdf_path:
+                self.statusbar.showMessage("Error al generar PDF")
+                # Limpiar RAW temporal
+                if os.path.exists(raw_path):
+                    os.remove(raw_path)
+                return
+            
+            # 3. VERIFICAR CONECTIVIDAD
             self.statusbar.showMessage("Verificando conexión a internet...")
             has_internet = self.network_handler.check_connectivity()
             
             if has_internet:
-                # Guardar ONLINE
+                # 4a. GUARDAR ONLINE
                 self.statusbar.showMessage("Subiendo estudio al servidor...")
                 
-                pdf_generator = PDFGenerator()
-                study_data_complete = self.get_study_data_for_pdf()
-
-                # Agregar los datos del paciente y análisis
-                study_data_complete['patient'] = patient_data
-                study_data_complete['analysis'] = {
-                    'interpretacion': patient_data.get('interpretacion', ''),
-                    'conclusion': patient_data.get('conclusion', '')
-                }
-                study_data_complete['timestamp'] = datetime.now().isoformat()
-
-                # Generar PDF
-                pdf_path = pdf_generator.generate_pdf(study_data_complete)
-                
-                # Subir archivos
                 response = self.network_handler.upload_files(
                     pdf_path,
                     raw_path,
                     patient_data
                 )
                 
-                # Limpiar archivo temporal PDF
-                if os.path.exists(pdf_path):
-                    os.remove(pdf_path)
-                
                 if response:
                     # Obtener URL de la respuesta
-                    # Ajustar según el formato real de respuesta del servidor
                     url = response.get('url', '') or response.get('link', '')
                     
                     if url:
@@ -696,32 +699,57 @@ class MainWindow(QMainWindow, Ui_Main):
                         self.statusbar.showMessage("¡Estudio guardado exitosamente en línea!")
                     else:
                         self.statusbar.showMessage("Subido pero sin URL de respuesta")
+                    
+                    # Limpiar archivos temporales
+                    if os.path.exists(pdf_path):
+                        os.remove(pdf_path)
+                    if os.path.exists(raw_path):
+                        os.remove(raw_path)
                 else:
-                    # Si falla, guardar offline como backup
+                    # Si falla subida, guardar offline como backup
                     self.statusbar.showMessage("Error al subir, guardando offline...")
-                    self.file_handler.save_study_offline(raw_path, patient_data)
+                    offline_path = self.file_handler.save_study_offline(raw_path, pdf_path, patient_data)
+                    
+                    if offline_path:
+                        from PySide6.QtWidgets import QMessageBox
+                        QMessageBox.information(
+                            self,
+                            "Guardado Offline",
+                            f"El estudio se guardó localmente.\n\n"
+                            f"Podrás subirlo más tarde cuando tengas conexión."
+                        )
+                    
+                    # Limpiar archivos temporales
+                    if os.path.exists(pdf_path):
+                        os.remove(pdf_path)
+                    if os.path.exists(raw_path):
+                        os.remove(raw_path)
             
             else:
-                # Guardar OFFLINE
+                # 4b. GUARDAR OFFLINE
                 self.statusbar.showMessage("Sin conexión, guardando offline...")
-                offline_path = self.file_handler.save_study_offline(raw_path, patient_data)
+                offline_path = self.file_handler.save_study_offline(raw_path, pdf_path, patient_data)
                 
                 if offline_path:
                     from PySide6.QtWidgets import QMessageBox
                     QMessageBox.information(
                         self,
                         "Guardado Offline",
-                        f"El estudio se guardó localmente en:\n\n{offline_path}\n\n"
+                        f"El estudio se guardó localmente.\n\n"
                         f"Podrás subirlo más tarde cuando tengas conexión."
                     )
-            
-            # Limpiar archivo temporal RAW
-            if os.path.exists(raw_path):
-                os.remove(raw_path)
+                
+                # Limpiar archivos temporales
+                if os.path.exists(pdf_path):
+                    os.remove(pdf_path)
+                if os.path.exists(raw_path):
+                    os.remove(raw_path)
                 
         except Exception as e:
             self.statusbar.showMessage(f"Error al guardar: {str(e)}")
             print(f"Error en save_data: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     @Slot()
     def open_file_dialog(self):

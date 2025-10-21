@@ -209,13 +209,14 @@ class FileHandler(QObject):
             error_msg = f"Error generando archivo RAW: {str(e)}"
             self.error_occurred.emit(error_msg)
             return None
-
-    def save_study_offline(self, raw_path, metadata):
+        
+    def save_study_offline(self, raw_path, pdf_path, metadata):
         """
-        Guardar estudio en carpeta offline local
+        Guardar estudio en carpeta offline local (RAW y PDF)
         
         Args:
             raw_path (str): Ruta al archivo RAW temporal
+            pdf_path (str): Ruta al archivo PDF temporal
             metadata (dict): Metadata del estudio con datos del paciente
             
         Returns:
@@ -226,22 +227,26 @@ class FileHandler(QObject):
             if not os.path.exists(self.offline_folder):
                 os.makedirs(self.offline_folder)
             
-            # Generar nombre de archivo
+            # Generar nombre base de archivo
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             nombre_clean = metadata.get('nombre', 'paciente').replace(" ", "_")
             rut_clean = metadata.get('rut', '').replace(".", "").replace("-", "")
             
-            filename = f"{timestamp}_{nombre_clean}_{rut_clean}_espiro.json"
+            base_filename = f"{timestamp}_{nombre_clean}_{rut_clean}_espiro"
             
-            destination_path = os.path.join(self.offline_folder, filename)
-            
-            # Copiar archivo RAW a carpeta offline
-            with open(raw_path, 'r') as src, open(destination_path, 'w') as dst:
+            # Guardar archivo RAW (JSON)
+            raw_destination = os.path.join(self.offline_folder, f"{base_filename}.json")
+            with open(raw_path, 'r') as src, open(raw_destination, 'w') as dst:
                 dst.write(src.read())
             
-            self.save_status.emit(f"Estudio guardado offline en:\n{destination_path}")
+            # Guardar archivo PDF
+            pdf_destination = os.path.join(self.offline_folder, f"{base_filename}.pdf")
+            with open(pdf_path, 'rb') as src, open(pdf_destination, 'wb') as dst:
+                dst.write(src.read())
             
-            return destination_path
+            self.save_status.emit(f"Estudio guardado offline:\n{raw_destination}\n{pdf_destination}")
+            
+            return raw_destination
             
         except Exception as e:
             error_msg = f"Error guardando offline: {str(e)}"
