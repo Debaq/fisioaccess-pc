@@ -99,8 +99,10 @@ class MainWindow(QMainWindow, Ui_Main):
         
         self.btn_start.clicked.connect(self.start_test)
         
-        # Conectar señales del list_test
+        # Conectar señales del list_test - NUEVA FUNCIONALIDAD
         self.list_test.itemSelectionChanged.connect(self.on_test_selection_changed)
+        self.list_test.itemClicked.connect(self.on_test_clicked)
+        
         # Conectar botón para eliminar pruebas
         self.btn_delete_test.clicked.connect(self.delete_selected_test)
 
@@ -184,7 +186,7 @@ class MainWindow(QMainWindow, Ui_Main):
             
             # ORDEN CORRECTO:
             # 1. Preparar el GraphHandler ANTES de enviar comando al hardware
-            self.graph_handler.prepare_new_recording()  # Nuevo método
+            self.graph_handler.prepare_new_recording()
             
             # 2. Enviar comando al hardware
             if self.serial_handler:
@@ -240,14 +242,27 @@ class MainWindow(QMainWindow, Ui_Main):
         if current_item:
             # Actualizar estado del botón eliminar
             self.update_button_states()
-            
-            # Aquí podrías mostrar los datos de la prueba seleccionada
-            recording_data = current_item.data(Qt.UserRole)
-            self.statusbar.showMessage(f"Seleccionada: {current_item.text()}")
         else:
             # Ninguna prueba seleccionada
             self.update_button_states()
-            self.statusbar.showMessage("Ninguna prueba seleccionada")
+
+    @Slot()
+    def on_test_clicked(self, item):
+        """Manejar click en una prueba de la lista"""
+        try:
+            recording_number = item.data(Qt.UserRole)
+            test_name = item.text()
+            
+            print(f"Prueba seleccionada: {test_name}, recording_number: {recording_number}")
+            
+            # Activar esta grabación en el GraphHandler
+            self.graph_handler.set_active_recording(recording_number)
+            
+            self.statusbar.showMessage(f"Mostrando: {test_name}")
+            
+        except Exception as e:
+            self.statusbar.showMessage(f"Error al seleccionar prueba: {str(e)}")
+            print(f"Error al seleccionar prueba: {str(e)}")
 
     @Slot()
     def delete_selected_test(self):
@@ -420,8 +435,15 @@ class MainWindow(QMainWindow, Ui_Main):
     @Slot()
     def save_data(self):
         """Guardar datos actuales en CSV"""
-        #self.file_handler.save_data_to_csv(self, self.graph_handler.data)
-        self.file_handler.save_data_to_csv(self, self.graph_handler.display_data)
+        # Si hay una curva activa, guardar esa
+        if self.graph_handler.active_recording_number is not None:
+            self.file_handler.save_data_to_csv(self, self.graph_handler.display_data)
+        else:
+            # Si no hay curva activa pero hay datos en display_data
+            if self.graph_handler.display_data['t']:
+                self.file_handler.save_data_to_csv(self, self.graph_handler.display_data)
+            else:
+                self.statusbar.showMessage("No hay datos para guardar. Seleccione una prueba primero.")
 
     @Slot()
     def clear_data(self):
@@ -431,6 +453,10 @@ class MainWindow(QMainWindow, Ui_Main):
         
         # Limpiar los gráficos
         self.graph_handler.clear_data()
+        
+        # Limpiar la lista de pruebas
+        self.list_test.clear()
+        self.test_counter = 0
 
     def closeEvent(self, event):
         """Manejar el cierre de la ventana"""

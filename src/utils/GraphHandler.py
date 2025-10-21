@@ -42,6 +42,12 @@ class GraphHandler(QWidget):
         
         # Curvas para grabaciones almacenadas
         self.stored_curves = []
+        
+        # Curva activa
+        self.active_recording_number = None
+        
+        # Diccionario para guardar posiciones de líneas por grabación
+        self.line_positions = {}
 
         # Configurar estilos de las curvas
         self.setup_curve_styles()
@@ -81,8 +87,8 @@ class GraphHandler(QWidget):
         grafico_flujo_volumen_x = 8
         grafico_flujo_volumen_y = 10
         self.flow_pressure_plot.setXRange(0, grafico_flujo_volumen_x, padding=0)
-        self.flow_pressure_plot.setYRange(0, grafico_flujo_volumen_y, padding=0)
-        self.flow_pressure_plot.getViewBox().setLimits(xMin=-8, xMax=grafico_flujo_volumen_x, yMin=-8, yMax=grafico_flujo_volumen_y)
+        self.flow_pressure_plot.setYRange(-10, grafico_flujo_volumen_y, padding=0)
+        self.flow_pressure_plot.getViewBox().setLimits(xMin=-8, xMax=grafico_flujo_volumen_x, yMin=-10, yMax=grafico_flujo_volumen_y)
         self.flow_pressure_plot.getViewBox().setMouseEnabled(x=False, y=False)
         self.flow_pressure_widget.setBackground('w')
         
@@ -237,6 +243,52 @@ class GraphHandler(QWidget):
         )
         self.v_line_fvc.setZValue(10)
         
+        # Líneas FIF (Flujos Inspiratorios Forzados) - en valores negativos
+        self.v_line_pif = pg.InfiniteLine(
+            pos=0, 
+            angle=90, 
+            movable=True,
+            pen=pg.mkPen('cyan', width=2),
+            bounds=(0, 7),
+            label="F",
+            labelOpts={
+                "position": 0.05,
+                "color": (0, 255, 255),
+                "fill": (255, 255, 255, 200)
+            }
+        )
+        self.v_line_pif.setZValue(10)
+
+        self.v_line_fif050 = pg.InfiniteLine(
+            pos=2, 
+            angle=90, 
+            movable=False,
+            pen=pg.mkPen('magenta', width=2),
+            bounds=(0, 7),
+            label="G",
+            labelOpts={
+                "position": 0.15,
+                "color": (255, 0, 255),
+                "fill": (255, 255, 255, 200)
+            }
+        )
+        self.v_line_fif050.setZValue(10)
+
+        self.v_line_fivc = pg.InfiniteLine(
+            pos=4, 
+            angle=90, 
+            movable=True,
+            pen=pg.mkPen('orange', width=2),
+            bounds=(0, 7),
+            label="H",
+            labelOpts={
+                "position": 0.25,
+                "color": (255, 165, 0),
+                "fill": (255, 255, 255, 200)
+            }
+        )
+        self.v_line_fivc.setZValue(10)
+        
         # Agregar líneas a los gráficos
         self.flow_time_plot.addItem(self.vLine1)
         self.flow_time_plot.addItem(self.vLine2)
@@ -246,12 +298,17 @@ class GraphHandler(QWidget):
         self.flow_pressure_plot.addItem(self.v_line_fef050)
         self.flow_pressure_plot.addItem(self.v_line_fef075)
         self.flow_pressure_plot.addItem(self.v_line_fvc)
+        self.flow_pressure_plot.addItem(self.v_line_pif)
+        self.flow_pressure_plot.addItem(self.v_line_fif050)
+        self.flow_pressure_plot.addItem(self.v_line_fivc)
         
         # Conectar señales
         self.vLine1.sigPositionChanged.connect(self.update_results_display)
         self.vLine2.sigPositionChanged.connect(self.update_results_display)
         self.v_line_pef.sigPositionChanged.connect(self.update_line_pef_fvc)
         self.v_line_fvc.sigPositionChanged.connect(self.update_line_pef_fvc)
+        self.v_line_pif.sigPositionChanged.connect(self.update_line_pif_fivc)
+        self.v_line_fivc.sigPositionChanged.connect(self.update_line_pif_fivc)
 
     def get_flow_at_volume(self, volume_pos):
         """Obtener el valor de flujo en una posición de volumen específica"""
@@ -331,13 +388,230 @@ class GraphHandler(QWidget):
         except Exception as e:
             print(f"Error actualizando líneas PEF/FVC: {e}")
 
+    def update_line_pif_fivc(self):
+        """Actualizar las líneas FIF cuando cambian PIF o FIVC"""
+        try:
+            pif_vol = self.v_line_pif.value()
+            fivc_vol = self.v_line_fivc.value()
+            
+            # Calcular posición de FIF50
+            fif050_vol = pif_vol + (fivc_vol - pif_vol) / 2
+            
+            self.v_line_fif050.setValue(fif050_vol)
+            
+            # Actualizar display de resultados
+            self.update_results_display()
+                
+        except Exception as e:
+            print(f"Error actualizando líneas PIF/FIVC: {e}")
+
+    def save_line_positions(self, recording_number):
+        """Guardar las posiciones actuales de las líneas para una grabación"""
+        if recording_number is None:
+            return
+            
+        self.line_positions[recording_number] = {
+            'vLine1': self.vLine1.value(),
+            'vLine2': self.vLine2.value(),
+            'v_line_pef': self.v_line_pef.value(),
+            'v_line_fvc': self.v_line_fvc.value(),
+            'v_line_pif': self.v_line_pif.value(),
+            'v_line_fivc': self.v_line_fivc.value()
+        }
+
+    def restore_line_positions(self, recording_number):
+        """Restaurar las posiciones de las líneas para una grabación"""
+        if recording_number not in self.line_positions:
+            # Posiciones por defecto si no hay guardadas
+            self.vLine1.setValue(0.5)
+            self.vLine2.setValue(1.5)
+            self.v_line_pef.setValue(0)
+            self.v_line_fvc.setValue(4)
+            self.v_line_pif.setValue(0)
+            self.v_line_fivc.setValue(4)
+            return
+            
+        positions = self.line_positions[recording_number]
+        self.vLine1.setValue(positions['vLine1'])
+        self.vLine2.setValue(positions['vLine2'])
+        self.v_line_pef.setValue(positions['v_line_pef'])
+        self.v_line_fvc.setValue(positions['v_line_fvc'])
+        self.v_line_pif.setValue(positions['v_line_pif'])
+        self.v_line_fivc.setValue(positions['v_line_fivc'])
+        
+        # Esto actualizará automáticamente las líneas dependientes
+        self.update_line_pef_fvc()
+        self.update_line_pif_fivc()
+
+    def set_active_recording(self, recording_number):
+        """Establecer una grabación como activa y actualizar visualización"""
+        # Guardar posiciones de la grabación anterior
+        if self.active_recording_number is not None:
+            self.save_line_positions(self.active_recording_number)
+        
+        # Establecer nueva grabación activa
+        self.active_recording_number = recording_number
+        
+        # Buscar la grabación
+        recording_data = None
+        for rec in self.stored_recordings:
+            if rec['recording_number'] == recording_number:
+                recording_data = rec
+                break
+        
+        if recording_data is None:
+            return
+        
+        # Cargar datos en display_data
+        self.display_data = {
+            't': recording_data['data']['t'].copy(),
+            'p': recording_data['data']['p'].copy(),
+            'f': recording_data['data']['f'].copy(),
+            'v': recording_data['data']['v'].copy()
+        }
+        
+        # Restaurar posiciones de líneas
+        self.restore_line_positions(recording_number)
+        
+        # Actualizar estilo de las curvas
+        self.update_curve_styles()
+        
+        # Actualizar gráficos
+        self.update_plots()
+
+    def update_curve_styles(self):
+        """Actualizar el estilo visual de las curvas según cuál está activa"""
+        for curve_data in self.stored_curves:
+            recording_num = curve_data['recording_number']
+            
+            if recording_num == self.active_recording_number:
+                # Curva activa: color original, opaca
+                color_idx = (recording_num - 1) % len(self.recording_colors)
+                color = self.recording_colors[color_idx]
+                pen = pg.mkPen(color, width=3)
+                
+                curve_data['curve_time'].setPen(pen)
+                if curve_data['curve_pressure']:
+                    curve_data['curve_pressure'].setPen(pen)
+            else:
+                # Curvas inactivas: grises, semi-transparentes
+                pen = pg.mkPen((150, 150, 150, 100), width=2, style=pg.QtCore.Qt.DashLine)
+                
+                curve_data['curve_time'].setPen(pen)
+                if curve_data['curve_pressure']:
+                    curve_data['curve_pressure'].setPen(pen)
+
+    def calculate_averages(self):
+        """Calcular promedios de todas las grabaciones almacenadas"""
+        if not self.stored_recordings:
+            return None
+        
+        metrics = {
+            'fev1': [],
+            'pef': [],
+            'fef25': [],
+            'fef50': [],
+            'fef75': [],
+            'fvc': [],
+            'pif': [],
+            'fif50': [],
+            'fivc': [],
+            'fev1_fvc_ratio': []
+        }
+        
+        # Calcular métricas para cada grabación
+        for rec in self.stored_recordings:
+            rec_num = rec['recording_number']
+            
+            # Cargar datos temporalmente
+            temp_display = self.display_data.copy()
+            self.display_data = rec['data'].copy()
+            
+            # Restaurar posiciones de líneas para esta grabación
+            if rec_num in self.line_positions:
+                positions = self.line_positions[rec_num]
+                
+                # FEV1
+                x1 = positions['vLine1']
+                x2 = positions['vLine2']
+                y1 = self.get_y_value_at_x(x1)
+                y2 = self.get_y_value_at_x(x2)
+                if y1 is not None and y2 is not None:
+                    metrics['fev1'].append(abs(y2 - y1))
+                
+                # PEF, FEF, FVC
+                pef_vol = positions['v_line_pef']
+                fvc_vol = positions['v_line_fvc']
+                
+                pef_flow = self.get_flow_at_volume(pef_vol)
+                if pef_flow is not None:
+                    metrics['pef'].append(pef_flow)
+                
+                # Calcular posiciones FEF
+                diff = (fvc_vol - pef_vol) / 4
+                fef25_vol = pef_vol + diff
+                fef50_vol = pef_vol + diff * 2
+                fef75_vol = pef_vol + diff * 3
+                
+                fef25_flow = self.get_flow_at_volume(fef25_vol)
+                fef50_flow = self.get_flow_at_volume(fef50_vol)
+                fef75_flow = self.get_flow_at_volume(fef75_vol)
+                
+                if fef25_flow is not None:
+                    metrics['fef25'].append(fef25_flow)
+                if fef50_flow is not None:
+                    metrics['fef50'].append(fef50_flow)
+                if fef75_flow is not None:
+                    metrics['fef75'].append(fef75_flow)
+                
+                metrics['fvc'].append(fvc_vol)
+                
+                # PIF, FIF, FIVC
+                pif_vol = positions['v_line_pif']
+                fivc_vol = positions['v_line_fivc']
+                
+                pif_flow = self.get_flow_at_volume(pif_vol)
+                if pif_flow is not None:
+                    metrics['pif'].append(abs(pif_flow))
+                
+                fif50_vol = pif_vol + (fivc_vol - pif_vol) / 2
+                fif50_flow = self.get_flow_at_volume(fif50_vol)
+                if fif50_flow is not None:
+                    metrics['fif50'].append(abs(fif50_flow))
+                
+                metrics['fivc'].append(fivc_vol)
+                
+                # FEV1/FVC ratio
+                if metrics['fev1'] and metrics['fvc'][-1] > 0:
+                    ratio = (metrics['fev1'][-1] / metrics['fvc'][-1]) * 100
+                    metrics['fev1_fvc_ratio'].append(ratio)
+            
+            # Restaurar datos originales
+            self.display_data = temp_display
+        
+        # Calcular promedios
+        averages = {}
+        for key, values in metrics.items():
+            if values:
+                averages[key] = np.mean(values)
+            else:
+                averages[key] = None
+        
+        return averages
+
     def update_results_display(self):
         """Actualizar la lista de resultados"""
         self.results_list.clear()
         
         try:
+            # Resultados de curva actual
+            if self.active_recording_number is not None:
+                self.results_list.addItem(f"=== Prueba {self.active_recording_number} ===")
+            else:
+                self.results_list.addItem("=== Curva Actual ===")
+            
             # Gráfico izquierdo (Volumen vs Tiempo)
-            self.results_list.addItem("=== Gráfico 1 ===")
+            self.results_list.addItem("--- Gráfico 1 ---")
             
             x1 = self.vLine1.value()
             x2 = self.vLine2.value()
@@ -348,12 +622,13 @@ class GraphHandler(QWidget):
                 fev1 = abs(y2 - y1)
                 self.results_list.addItem(f"Línea 1: {x1:.2f} s")
                 self.results_list.addItem(f"Línea 2: {x2:.2f} s")
-                self.results_list.addItem(f"FEV1: {fev1:.2f} L")
+                self.results_list.addItem(f"FEV1: {fev1:.3f} L")
                 self.results_list.addItem("")
             
             # Gráfico derecho (Flujo vs Volumen)
-            self.results_list.addItem("=== Gráfico 2 ===")
+            self.results_list.addItem("--- Gráfico 2 ---")
             
+            # FEF (Flujos Espiratorios)
             pef_vol = self.v_line_pef.value()
             fvc_vol = self.v_line_fvc.value()
             
@@ -363,22 +638,76 @@ class GraphHandler(QWidget):
             fef75_flow = self.get_flow_at_volume(self.v_line_fef075.value())
             
             if pef_flow is not None:
-                self.results_list.addItem(f"A - PEF: {pef_flow:.2f} L/s")
+                self.results_list.addItem(f"A - PEF: {pef_flow:.3f} L/s")
             if fef25_flow is not None:
-                self.results_list.addItem(f"B - FEF25: {fef25_flow:.2f} L/s")
+                self.results_list.addItem(f"B - FEF25: {fef25_flow:.3f} L/s")
             if fef50_flow is not None:
-                self.results_list.addItem(f"C - FEF50: {fef50_flow:.2f} L/s")
+                fef50_vol = self.v_line_fef050.value()
+                self.results_list.addItem(f"C - FEF50: {fef50_flow:.3f} L/s @ {fef50_vol:.3f} L")
             if fef75_flow is not None:
-                self.results_list.addItem(f"D - FEF75: {fef75_flow:.2f} L/s")
+                fef75_vol = self.v_line_fef075.value()
+                self.results_list.addItem(f"D - FEF75: {fef75_flow:.3f} L/s @ {fef75_vol:.3f} L")
             
-            self.results_list.addItem(f"E - FVC: {fvc_vol:.2f} L")
+            self.results_list.addItem(f"E - FVC: {fvc_vol:.3f} L")
+            self.results_list.addItem("")
+            
+            # FIF (Flujos Inspiratorios)
+            pif_vol = self.v_line_pif.value()
+            fivc_vol = self.v_line_fivc.value()
+            
+            pif_flow = self.get_flow_at_volume(pif_vol)
+            fif50_flow = self.get_flow_at_volume(self.v_line_fif050.value())
+            
+            if pif_flow is not None:
+                self.results_list.addItem(f"F - PIF: {abs(pif_flow):.3f} L/s")
+            if fif50_flow is not None:
+                fif50_vol = self.v_line_fif050.value()
+                self.results_list.addItem(f"G - FIF50: {abs(fif50_flow):.3f} L/s @ {fif50_vol:.3f} L")
+            
+            self.results_list.addItem(f"H - FIVC: {fivc_vol:.3f} L")
+            self.results_list.addItem("")
             
             # Calcular FEV1/FVC si hay datos
             if y1 is not None and y2 is not None and fvc_vol > 0:
                 fev1 = abs(y2 - y1)
                 ratio = (fev1 / fvc_vol) * 100
-                self.results_list.addItem("")
                 self.results_list.addItem(f"FEV1/FVC: {ratio:.1f}%")
+                self.results_list.addItem("")
+            
+            # Promedios de todas las curvas
+            if len(self.stored_recordings) > 1:
+                self.results_list.addItem("=== PROMEDIOS ===")
+                averages = self.calculate_averages()
+                
+                if averages:
+                    if averages['fev1'] is not None:
+                        self.results_list.addItem(f"FEV1: {averages['fev1']:.3f} L")
+                    if averages['pef'] is not None:
+                        self.results_list.addItem(f"PEF: {averages['pef']:.3f} L/s")
+                    if averages['fef25'] is not None:
+                        self.results_list.addItem(f"FEF25: {averages['fef25']:.3f} L/s")
+                    if averages['fef50'] is not None:
+                        self.results_list.addItem(f"FEF50: {averages['fef50']:.3f} L/s")
+                    if averages['fef75'] is not None:
+                        self.results_list.addItem(f"FEF75: {averages['fef75']:.3f} L/s")
+                    if averages['fvc'] is not None:
+                        self.results_list.addItem(f"FVC: {averages['fvc']:.3f} L")
+                    
+                    self.results_list.addItem("")
+                    
+                    if averages['pif'] is not None:
+                        self.results_list.addItem(f"PIF: {averages['pif']:.3f} L/s")
+                    if averages['fif50'] is not None:
+                        self.results_list.addItem(f"FIF50: {averages['fif50']:.3f} L/s")
+                    if averages['fivc'] is not None:
+                        self.results_list.addItem(f"FIVC: {averages['fivc']:.3f} L")
+                    
+                    self.results_list.addItem("")
+                    
+                    if averages['fev1_fvc_ratio'] is not None:
+                        self.results_list.addItem(f"FEV1/FVC: {averages['fev1_fvc_ratio']:.1f}%")
+                    
+                    self.results_list.addItem(f"(n={len(self.stored_recordings)})")
                 
         except Exception as e:
             print(f"Error actualizando resultados: {e}")
@@ -415,6 +744,9 @@ class GraphHandler(QWidget):
             }
             self.stored_recordings.append(recording_data)
             self.add_permanent_curve(recording_data)
+            
+            # Guardar posiciones de líneas para esta grabación
+            self.save_line_positions(recording_data['recording_number'])
             
             self.flow_time_plot.autoRange()
             self.flow_pressure_plot.autoRange()
@@ -453,6 +785,16 @@ class GraphHandler(QWidget):
 
     def delete_recording(self, recording_number):
         """Eliminar grabación específica por número"""
+        # Eliminar posiciones de líneas guardadas
+        if recording_number in self.line_positions:
+            del self.line_positions[recording_number]
+        
+        # Si se elimina la curva activa, desactivar
+        if self.active_recording_number == recording_number:
+            self.active_recording_number = None
+            self.display_data = {'t': [], 'p': [], 'f': [], 'v': []}
+        
+        # Eliminar de stored_recordings
         for i, recording in enumerate(self.stored_recordings):
             if recording['recording_number'] == recording_number:
                 del self.stored_recordings[i]
@@ -460,16 +802,19 @@ class GraphHandler(QWidget):
         else:
             return False
 
+        # Limpiar gráficos
         self.flow_time_plot.clear()
         self.flow_pressure_plot.clear()
         self.stored_curves = []
 
+        # Re-agregar curvas restantes
         for recording in self.stored_recordings:
             self.add_permanent_curve(recording)
-            
-        self.display_data = {'t': [], 'p': [], 'f': [], 'v': []}
+        
+        # Restaurar estilos
         self.setup_curve_styles()
         self.setup_vertical_lines()
+        self.update_curve_styles()
         self.update_plots()
 
         return True
@@ -488,6 +833,7 @@ class GraphHandler(QWidget):
         self.recording_started = False
         self.start_time = None
         self.ready_for_new_recording = False
+        self.active_recording_number = None
 
     @Slot(dict)
     def update_data(self, new_data):
@@ -563,11 +909,17 @@ class GraphHandler(QWidget):
         self.ready_for_new_recording = False
         self.stored_recordings = []
         self.stored_curves = []
+        self.active_recording_number = None
+        self.line_positions = {}
 
         self.update_plots()
 
         self.vLine1.setValue(0.5)
         self.vLine2.setValue(1.5)
+        self.v_line_pef.setValue(0)
+        self.v_line_fvc.setValue(4)
+        self.v_line_pif.setValue(0)
+        self.v_line_fivc.setValue(4)
         
         self.graph_record = True
         self.update_results_display()
