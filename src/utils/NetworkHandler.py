@@ -130,3 +130,84 @@ class NetworkHandler(QObject):
             timeout (int): Timeout en segundos
         """
         self.timeout = timeout
+    
+    def get_online_studies(self):
+        """
+        Obtener listado de estudios disponibles en el servidor
+        
+        Returns:
+            list: Lista de diccionarios con información de estudios, None si falla
+        """
+        try:
+            # Construir URL del listado (mismo servidor, archivo listado.php)
+            base_url = self.api_url.rsplit('/', 1)[0]  # Quitar index.php
+            listado_url = f"{base_url}/listado.php"
+            
+            # Realizar petición GET
+            response = requests.get(listado_url, timeout=self.timeout)
+            
+            # Verificar respuesta
+            response.raise_for_status()
+            
+            # Parsear respuesta JSON
+            studies = response.json()
+            
+            # Validar que sea una lista
+            if not isinstance(studies, list):
+                raise ValueError("La respuesta no es una lista válida")
+            
+            return studies
+            
+        except requests.exceptions.Timeout:
+            error_msg = "Timeout: El servidor no respondió a tiempo"
+            self.upload_failed.emit(error_msg)
+            return None
+            
+        except requests.exceptions.ConnectionError:
+            error_msg = "Error de conexión: No se pudo conectar al servidor"
+            self.upload_failed.emit(error_msg)
+            return None
+            
+        except requests.exceptions.HTTPError as e:
+            error_msg = f"Error HTTP: {e.response.status_code} - {e.response.reason}"
+            self.upload_failed.emit(error_msg)
+            return None
+            
+        except ValueError as e:
+            error_msg = f"Error al parsear respuesta del servidor: {str(e)}"
+            self.upload_failed.emit(error_msg)
+            return None
+            
+        except Exception as e:
+            error_msg = f"Error inesperado al obtener listado: {str(e)}"
+            self.upload_failed.emit(error_msg)
+            return None
+    
+    def download_study(self, url, output_path):
+        """
+        Descargar un archivo de estudio desde URL
+        
+        Args:
+            url (str): URL del archivo a descargar
+            output_path (str): Ruta donde guardar el archivo
+            
+        Returns:
+            bool: True si se descargó exitosamente, False en caso contrario
+        """
+        try:
+            # Descargar archivo
+            response = requests.get(url, timeout=30, stream=True)
+            response.raise_for_status()
+            
+            # Guardar en disco
+            with open(output_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+            
+            return True
+            
+        except Exception as e:
+            error_msg = f"Error descargando archivo: {str(e)}"
+            self.upload_failed.emit(error_msg)
+            return False

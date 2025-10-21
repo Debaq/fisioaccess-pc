@@ -1,3 +1,5 @@
+import json
+
 from PySide6.QtWidgets import QMainWindow, QListWidgetItem, QMenu
 from PySide6.QtCore import QTimer, Slot, Qt
 from PySide6.QtGui import QColor, QBrush, QAction
@@ -13,6 +15,7 @@ from utils.NetworkHandler import NetworkHandler
 from utils.QRGenerator import QRGenerator, QRDisplayDialog
 import os
 from utils.PDFGenerator import PDFGenerator
+from ui.OpenStudyDialog import OpenStudyDialog
 
 
 
@@ -721,34 +724,33 @@ class MainWindow(QMainWindow, Ui_Main):
 
     @Slot()
     def open_file_dialog(self):
-        """Abrir diálogo para seleccionar tipo de archivo a abrir"""
-        from PySide6.QtWidgets import QFileDialog
-        
+        """Abrir diálogo unificado para estudios offline/online"""
         # Desconectar del puerto serial si está conectado
         if self.btn_connect.isChecked():
             self.btn_connect.setChecked(False)
             self.handle_connection()
         
-        # Abrir diálogo genérico que acepta CSV y JSON
-        file_path, selected_filter = QFileDialog.getOpenFileName(
-            self,
-            "Abrir Archivo",
-            os.path.expanduser("~/Documents"),
-            "Estudios Completos (*.json);;Archivos CSV Legacy (*.csv);;Todos los archivos (*.*)"
+        # Abrir diálogo unificado
+        dialog = OpenStudyDialog(
+            self.network_handler,
+            self.file_handler,
+            self
         )
         
-        if not file_path:
-            return
-        
-        # Determinar tipo de archivo por extensión
-        if file_path.endswith('.json'):
-            # Cargar estudio completo
-            self.file_handler.open_complete_study(self)
-        elif file_path.endswith('.csv'):
-            # Cargar CSV legacy
-            self.file_handler.open_data_file(self)
-        else:
-            self.statusbar.showMessage("Formato de archivo no reconocido")
+        if dialog.exec() == OpenStudyDialog.Accepted:
+            selected_file = dialog.get_selected_file()
+            
+            if selected_file and os.path.exists(selected_file):
+                # Cargar el estudio
+                try:
+                    with open(selected_file, 'r') as f:
+                        study_data = json.load(f)
+                    
+                    # Cargar usando el método existente
+                    self.load_complete_study(study_data)
+                    
+                except Exception as e:
+                    self.statusbar.showMessage(f"Error al abrir estudio: {str(e)}")
 
     @Slot(dict)
     def load_complete_study(self, study_data):
