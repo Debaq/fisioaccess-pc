@@ -496,12 +496,24 @@ class GraphHandler(QWidget):
         
         return pef_flow
 
-    def calculate_quality(self):
+    def calculate_quality(self, filter_status=None):
         """
         Calcular la calidad de las maniobras según criterios ATS/ERS
-        Retorna dict con: grade, n_maneuvers, repeatability_ml, suggestions
+        
+        Args:
+            filter_status (str): 'PRE', 'POST' o None para todas
+            
+        Returns:
+            dict: grade, n_maneuvers, repeatability_ml, suggestions
         """
-        n_maneuvers = len(self.stored_recordings)
+        # Filtrar grabaciones según status
+        if filter_status:
+            filtered_recordings = [r for r in self.stored_recordings 
+                                 if r.get('bronchodilator_status') == filter_status]
+        else:
+            filtered_recordings = self.stored_recordings
+        
+        n_maneuvers = len(filtered_recordings)
         
         if n_maneuvers < 2:
             return {
@@ -509,12 +521,13 @@ class GraphHandler(QWidget):
                 'n_maneuvers': n_maneuvers,
                 'repeatability_ml': None,
                 'pef_values': [],
-                'suggestions': []
+                'suggestions': [],
+                'filter_status': filter_status
             }
         
         # Obtener PEF de cada maniobra
         pef_values = []
-        for rec in self.stored_recordings:
+        for rec in filtered_recordings:
             pef = self.get_pef_for_recording(rec['recording_number'])
             if pef is not None:
                 pef_values.append({
@@ -528,7 +541,8 @@ class GraphHandler(QWidget):
                 'n_maneuvers': n_maneuvers,
                 'repeatability_ml': None,
                 'pef_values': pef_values,
-                'suggestions': []
+                'suggestions': [],
+                'filter_status': filter_status
             }
         
         # Calcular repetibilidad (diferencia max - min en ml)
@@ -559,7 +573,8 @@ class GraphHandler(QWidget):
             'n_maneuvers': n_maneuvers,
             'repeatability_ml': repeatability_ml,
             'pef_values': pef_values,
-            'suggestions': suggestions
+            'suggestions': suggestions,
+            'filter_status': filter_status
         }
 
     def calculate_removal_suggestions(self, pef_values, current_n, current_repeatability):
@@ -624,9 +639,24 @@ class GraphHandler(QWidget):
         
         return None
 
-    def calculate_averages(self):
-        """Calcular promedios de todas las grabaciones almacenadas"""
-        if not self.stored_recordings:
+    def calculate_averages(self, filter_status=None):
+        """
+        Calcular promedios de las grabaciones almacenadas
+        
+        Args:
+            filter_status (str): 'PRE', 'POST' o None para todas
+            
+        Returns:
+            dict: Diccionario con promedios de métricas
+        """
+        # Filtrar grabaciones según status
+        if filter_status:
+            recordings_to_average = [r for r in self.stored_recordings 
+                                    if r.get('bronchodilator_status') == filter_status]
+        else:
+            recordings_to_average = self.stored_recordings
+        
+        if not recordings_to_average:
             return None
         
         metrics = {
@@ -643,7 +673,7 @@ class GraphHandler(QWidget):
         }
         
         # Calcular métricas para cada grabación
-        for rec in self.stored_recordings:
+        for rec in recordings_to_average:
             rec_num = rec['recording_number']
             
             # Cargar datos temporalmente
@@ -715,7 +745,42 @@ class GraphHandler(QWidget):
             else:
                 averages[key] = None
         
+        averages['n_recordings'] = len(recordings_to_average)
+        averages['filter_status'] = filter_status
+        
         return averages
+
+    def set_bronchodilator_status(self, recording_number, status):
+        """
+        Establecer el estado de broncodilatador de una grabación
+        
+        Args:
+            recording_number (int): Número de grabación
+            status (str): 'PRE' o 'POST'
+            
+        Returns:
+            bool: True si se actualizó correctamente
+        """
+        for rec in self.stored_recordings:
+            if rec['recording_number'] == recording_number:
+                rec['bronchodilator_status'] = status
+                return True
+        return False
+
+    def get_bronchodilator_status(self, recording_number):
+        """
+        Obtener el estado de broncodilatador de una grabación
+        
+        Args:
+            recording_number (int): Número de grabación
+            
+        Returns:
+            str: 'PRE', 'POST' o None
+        """
+        for rec in self.stored_recordings:
+            if rec['recording_number'] == recording_number:
+                return rec.get('bronchodilator_status', 'PRE')
+        return None
 
     def update_results_display(self):
         """Actualizar la lista de resultados"""
@@ -724,7 +789,8 @@ class GraphHandler(QWidget):
         try:
             # Resultados de curva actual
             if self.active_recording_number is not None:
-                self.results_list.addItem(f"=== Prueba {self.active_recording_number} ===")
+                status = self.get_bronchodilator_status(self.active_recording_number)
+                self.results_list.addItem(f"=== Prueba {self.active_recording_number} [{status}] ===")
             else:
                 self.results_list.addItem("=== Curva Actual ===")
             
@@ -788,59 +854,100 @@ class GraphHandler(QWidget):
                 self.results_list.addItem(f"FEV1/FVC: {ratio:.1f}%")
                 self.results_list.addItem("")
             
-            # Promedios de todas las curvas
-            if len(self.stored_recordings) > 1:
-                self.results_list.addItem("=== PROMEDIOS ===")
-                averages = self.calculate_averages()
+            # Promedios PRE
+            pre_recordings = [r for r in self.stored_recordings 
+                            if r.get('bronchodilator_status') == 'PRE']
+            if len(pre_recordings) > 1:
+                self.results_list.addItem("=== PROMEDIOS PRE ===")
+                averages_pre = self.calculate_averages('PRE')
                 
-                if averages:
-                    if averages['fev1'] is not None:
-                        self.results_list.addItem(f"FEV1: {averages['fev1']:.3f} L")
-                    if averages['pef'] is not None:
-                        self.results_list.addItem(f"PEF: {averages['pef']:.3f} L/s")
+                if averages_pre:
+                    if averages_pre['fev1'] is not None:
+                        self.results_list.addItem(f"FEV1: {averages_pre['fev1']:.3f} L")
+                    if averages_pre['pef'] is not None:
+                        self.results_list.addItem(f"PEF: {averages_pre['pef']:.3f} L/s")
                     
-                    if averages['fef25'] is not None:
-                        self.results_list.addItem(f"FEF25: {averages['fef25']:.3f} L/s")
-                    if averages['fif25'] is not None:
-                        self.results_list.addItem(f"FIF25: {averages['fif25']:.3f} L/s")
+                    if averages_pre['fef25'] is not None:
+                        self.results_list.addItem(f"FEF25: {averages_pre['fef25']:.3f} L/s")
+                    if averages_pre['fif25'] is not None:
+                        self.results_list.addItem(f"FIF25: {averages_pre['fif25']:.3f} L/s")
                     
-                    if averages['fef50'] is not None:
-                        self.results_list.addItem(f"FEF50: {averages['fef50']:.3f} L/s")
-                    if averages['fif50'] is not None:
-                        self.results_list.addItem(f"FIF50: {averages['fif50']:.3f} L/s")
+                    if averages_pre['fef50'] is not None:
+                        self.results_list.addItem(f"FEF50: {averages_pre['fef50']:.3f} L/s")
+                    if averages_pre['fif50'] is not None:
+                        self.results_list.addItem(f"FIF50: {averages_pre['fif50']:.3f} L/s")
                     
-                    if averages['fef75'] is not None:
-                        self.results_list.addItem(f"FEF75: {averages['fef75']:.3f} L/s")
-                    if averages['fif75'] is not None:
-                        self.results_list.addItem(f"FIF75: {averages['fif75']:.3f} L/s")
+                    if averages_pre['fef75'] is not None:
+                        self.results_list.addItem(f"FEF75: {averages_pre['fef75']:.3f} L/s")
+                    if averages_pre['fif75'] is not None:
+                        self.results_list.addItem(f"FIF75: {averages_pre['fif75']:.3f} L/s")
                     
-                    if averages['fvc'] is not None:
-                        self.results_list.addItem(f"FVC: {averages['fvc']:.3f} L")
+                    if averages_pre['fvc'] is not None:
+                        self.results_list.addItem(f"FVC: {averages_pre['fvc']:.3f} L")
                     
                     self.results_list.addItem("")
                     
-                    if averages['fev1_fvc_ratio'] is not None:
-                        self.results_list.addItem(f"FEV1/FVC: {averages['fev1_fvc_ratio']:.1f}%")
+                    if averages_pre['fev1_fvc_ratio'] is not None:
+                        self.results_list.addItem(f"FEV1/FVC: {averages_pre['fev1_fvc_ratio']:.1f}%")
                     
-                    self.results_list.addItem(f"(n={len(self.stored_recordings)})")
+                    self.results_list.addItem(f"(n={len(pre_recordings)})")
                     self.results_list.addItem("")
             
-            # Sección de calidad
-            if len(self.stored_recordings) >= 2:
-                quality = self.calculate_quality()
+            # Promedios POST
+            post_recordings = [r for r in self.stored_recordings 
+                             if r.get('bronchodilator_status') == 'POST']
+            if len(post_recordings) > 1:
+                self.results_list.addItem("=== PROMEDIOS POST ===")
+                averages_post = self.calculate_averages('POST')
                 
-                self.results_list.addItem("=== CALIDAD ===")
+                if averages_post:
+                    if averages_post['fev1'] is not None:
+                        self.results_list.addItem(f"FEV1: {averages_post['fev1']:.3f} L")
+                    if averages_post['pef'] is not None:
+                        self.results_list.addItem(f"PEF: {averages_post['pef']:.3f} L/s")
+                    
+                    if averages_post['fef25'] is not None:
+                        self.results_list.addItem(f"FEF25: {averages_post['fef25']:.3f} L/s")
+                    if averages_post['fif25'] is not None:
+                        self.results_list.addItem(f"FIF25: {averages_post['fif25']:.3f} L/s")
+                    
+                    if averages_post['fef50'] is not None:
+                        self.results_list.addItem(f"FEF50: {averages_post['fef50']:.3f} L/s")
+                    if averages_post['fif50'] is not None:
+                        self.results_list.addItem(f"FIF50: {averages_post['fif50']:.3f} L/s")
+                    
+                    if averages_post['fef75'] is not None:
+                        self.results_list.addItem(f"FEF75: {averages_post['fef75']:.3f} L/s")
+                    if averages_post['fif75'] is not None:
+                        self.results_list.addItem(f"FIF75: {averages_post['fif75']:.3f} L/s")
+                    
+                    if averages_post['fvc'] is not None:
+                        self.results_list.addItem(f"FVC: {averages_post['fvc']:.3f} L")
+                    
+                    self.results_list.addItem("")
+                    
+                    if averages_post['fev1_fvc_ratio'] is not None:
+                        self.results_list.addItem(f"FEV1/FVC: {averages_post['fev1_fvc_ratio']:.1f}%")
+                    
+                    self.results_list.addItem(f"(n={len(post_recordings)})")
+                    self.results_list.addItem("")
+            
+            # Sección de calidad PRE
+            if len(pre_recordings) >= 2:
+                quality_pre = self.calculate_quality('PRE')
                 
-                if quality['grade']:
-                    self.results_list.addItem(f"Grado: {quality['grade']}")
-                    self.results_list.addItem(f"Maniobras: {quality['n_maneuvers']}")
-                    self.results_list.addItem(f"Repetibilidad: {quality['repeatability_ml']:.0f} ml")
+                self.results_list.addItem("=== CALIDAD PRE ===")
+                
+                if quality_pre['grade']:
+                    self.results_list.addItem(f"Grado: {quality_pre['grade']}")
+                    self.results_list.addItem(f"Maniobras: {quality_pre['n_maneuvers']}")
+                    self.results_list.addItem(f"Repetibilidad: {quality_pre['repeatability_ml']:.0f} ml")
                     self.results_list.addItem("")
                     
                     # Mostrar sugerencias si existen
-                    if quality['suggestions']:
+                    if quality_pre['suggestions']:
                         self.results_list.addItem("--- Sugerencia ---")
-                        for suggestion in quality['suggestions']:
+                        for suggestion in quality_pre['suggestions']:
                             rec_num = suggestion['recording_number']
                             new_grade = suggestion['new_grade']
                             new_rep = suggestion['new_repeatability']
@@ -848,9 +955,40 @@ class GraphHandler(QWidget):
                             self.results_list.addItem(f"→ Grado: {new_grade}")
                             self.results_list.addItem(f"→ Rep: {new_rep:.0f} ml")
                             self.results_list.addItem("")
+            
+            # Sección de calidad POST
+            if len(post_recordings) >= 2:
+                quality_post = self.calculate_quality('POST')
                 
-                # Emitir señal con información de calidad
-                self.quality_changed.emit(quality)
+                self.results_list.addItem("=== CALIDAD POST ===")
+                
+                if quality_post['grade']:
+                    self.results_list.addItem(f"Grado: {quality_post['grade']}")
+                    self.results_list.addItem(f"Maniobras: {quality_post['n_maneuvers']}")
+                    self.results_list.addItem(f"Repetibilidad: {quality_post['repeatability_ml']:.0f} ml")
+                    self.results_list.addItem("")
+                    
+                    # Mostrar sugerencias si existen
+                    if quality_post['suggestions']:
+                        self.results_list.addItem("--- Sugerencia ---")
+                        for suggestion in quality_post['suggestions']:
+                            rec_num = suggestion['recording_number']
+                            new_grade = suggestion['new_grade']
+                            new_rep = suggestion['new_repeatability']
+                            self.results_list.addItem(f"Eliminar Prueba {rec_num}")
+                            self.results_list.addItem(f"→ Grado: {new_grade}")
+                            self.results_list.addItem(f"→ Rep: {new_rep:.0f} ml")
+                            self.results_list.addItem("")
+            
+            # Emitir señal con información de calidad (ambas si existen)
+            quality_info = {}
+            if len(pre_recordings) >= 2:
+                quality_info['PRE'] = self.calculate_quality('PRE')
+            if len(post_recordings) >= 2:
+                quality_info['POST'] = self.calculate_quality('POST')
+            
+            if quality_info:
+                self.quality_changed.emit(quality_info)
                 
         except Exception as e:
             print(f"Error actualizando resultados: {e}")
@@ -878,6 +1016,7 @@ class GraphHandler(QWidget):
         if self.display_data['t']:
             recording_data = {
                 'recording_number': len(self.stored_recordings) + 1,
+                'bronchodilator_status': 'PRE',  # Por defecto es PRE
                 'data': {
                     't': self.display_data['t'].copy(),
                     'p': self.display_data['p'].copy(),

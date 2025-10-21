@@ -572,6 +572,14 @@
         "documentation": {}
     },
     {
+        "label": "QMenu",
+        "importPath": "PySide6.QtWidgets",
+        "description": "PySide6.QtWidgets",
+        "isExtraImport": true,
+        "detail": "PySide6.QtWidgets",
+        "documentation": {}
+    },
+    {
         "label": "QFileDialog",
         "importPath": "PySide6.QtWidgets",
         "description": "PySide6.QtWidgets",
@@ -829,6 +837,14 @@
     },
     {
         "label": "QBrush",
+        "importPath": "PySide6.QtGui",
+        "description": "PySide6.QtGui",
+        "isExtraImport": true,
+        "detail": "PySide6.QtGui",
+        "documentation": {}
+    },
+    {
+        "label": "QAction",
         "importPath": "PySide6.QtGui",
         "description": "PySide6.QtGui",
         "isExtraImport": true,

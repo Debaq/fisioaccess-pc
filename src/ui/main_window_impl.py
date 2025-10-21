@@ -1,6 +1,6 @@
-from PySide6.QtWidgets import QMainWindow, QListWidgetItem
+from PySide6.QtWidgets import QMainWindow, QListWidgetItem, QMenu
 from PySide6.QtCore import QTimer, Slot, Qt
-from PySide6.QtGui import QColor, QBrush
+from PySide6.QtGui import QColor, QBrush, QAction
 import serial.tools.list_ports
 from .main_window import Ui_Main
 from serial_comm.serial_handler import SerialHandler  
@@ -49,6 +49,9 @@ class MainWindow(QMainWindow, Ui_Main):
         
         # Lista para mantener track de los puertos disponibles
         self.available_ports = []
+        
+        # Habilitar menú contextual en list_test
+        self.list_test.setContextMenuPolicy(Qt.CustomContextMenu)
         
         # Conectar señales
         self.connect_signals()
@@ -123,14 +126,111 @@ class MainWindow(QMainWindow, Ui_Main):
         
         self.btn_start.clicked.connect(self.start_test)
         
-        # Conectar señales del list_test - NUEVA FUNCIONALIDAD
+        # Conectar señales del list_test
         self.list_test.itemSelectionChanged.connect(self.on_test_selection_changed)
         self.list_test.itemClicked.connect(self.on_test_clicked)
+        
+        # Conectar menú contextual
+        self.list_test.customContextMenuRequested.connect(self.show_context_menu)
         
         # Conectar botón para eliminar pruebas
         self.btn_delete_test.clicked.connect(self.delete_selected_test)
 
         print("Conexión de señales completada\n")
+
+    def show_context_menu(self, position):
+        """Mostrar menú contextual para cambiar estado PRE/POST"""
+        item = self.list_test.itemAt(position)
+        if not item:
+            return
+        
+        recording_number = item.data(Qt.UserRole)
+        if recording_number is None:
+            return
+        
+        # Obtener estado actual
+        current_status = self.graph_handler.get_bronchodilator_status(recording_number)
+        
+        # Crear menú
+        menu = QMenu(self)
+        
+        # Acción PRE
+        action_pre = QAction("Marcar como PRE", self)
+        action_pre.setCheckable(True)
+        action_pre.setChecked(current_status == 'PRE')
+        action_pre.triggered.connect(lambda: self.set_test_status(recording_number, 'PRE'))
+        menu.addAction(action_pre)
+        
+        # Acción POST
+        action_post = QAction("Marcar como POST", self)
+        action_post.setCheckable(True)
+        action_post.setChecked(current_status == 'POST')
+        action_post.triggered.connect(lambda: self.set_test_status(recording_number, 'POST'))
+        menu.addAction(action_post)
+        
+        # Mostrar menú
+        menu.exec(self.list_test.viewport().mapToGlobal(position))
+
+    def set_test_status(self, recording_number, status):
+        """
+        Establecer el estado PRE/POST de una prueba
+        
+        Args:
+            recording_number (int): Número de grabación
+            status (str): 'PRE' o 'POST'
+        """
+        try:
+            # Actualizar en GraphHandler
+            success = self.graph_handler.set_bronchodilator_status(recording_number, status)
+            
+            if success:
+                # Actualizar texto del item en la lista
+                self.update_test_item_text(recording_number)
+                
+                # Actualizar display de resultados
+                self.graph_handler.update_results_display()
+                
+                self.statusbar.showMessage(f"Prueba {recording_number} marcada como {status}")
+            else:
+                self.statusbar.showMessage(f"Error: No se encontró la prueba {recording_number}")
+                
+        except Exception as e:
+            self.statusbar.showMessage(f"Error al cambiar estado: {str(e)}")
+            print(f"Error en set_test_status: {str(e)}")
+
+    def update_test_item_text(self, recording_number):
+        """
+        Actualizar el texto de un item en la lista según su estado y calidad
+        
+        Args:
+            recording_number (int): Número de grabación
+        """
+        # Buscar el item en la lista
+        for i in range(self.list_test.count()):
+            item = self.list_test.item(i)
+            if item.data(Qt.UserRole) == recording_number:
+                # Obtener estado
+                status = self.graph_handler.get_bronchodilator_status(recording_number)
+                
+                # Construir texto base
+                text = f"Prueba {recording_number} [{status}]"
+                
+                # Agregar badge de calidad si existe
+                if self.current_quality:
+                    # Buscar en la calidad del tipo correcto
+                    quality_info = self.current_quality.get(status)
+                    if quality_info and quality_info.get('grade'):
+                        text += f" [{quality_info['grade']}]"
+                        
+                        # Verificar si está en sugerencias de eliminación
+                        if quality_info.get('suggestions'):
+                            for suggestion in quality_info['suggestions']:
+                                if suggestion['recording_number'] == recording_number:
+                                    text += "*"
+                                    break
+                
+                item.setText(text)
+                break
 
     def update_button_states(self):
         """Actualizar el estado de los botones según el estado actual"""
@@ -233,16 +333,18 @@ class MainWindow(QMainWindow, Ui_Main):
             self.is_testing = False
             self.test_counter += 1
             
-            # Crear item en la lista de pruebas
-            test_name = f"Prueba {self.test_counter}"
-            item = QListWidgetItem(test_name)
-            
-            # Guardar el número de grabación, no todo el objeto
+            # Obtener número de grabación
             if isinstance(recording_data, dict) and 'recording_number' in recording_data:
                 recording_number = recording_data['recording_number']
             else:
-                recording_number = recording_data  # Asumir que ya es el número
+                recording_number = recording_data
             
+            # Obtener estado broncodilatador
+            status = self.graph_handler.get_bronchodilator_status(recording_number)
+            
+            # Crear item en la lista de pruebas
+            test_name = f"Prueba {recording_number} [{status}]"
+            item = QListWidgetItem(test_name)
             item.setData(Qt.UserRole, recording_number)
             self.list_test.addItem(item)
             
@@ -261,41 +363,58 @@ class MainWindow(QMainWindow, Ui_Main):
 
     @Slot(dict)
     def update_test_list_colors(self, quality_info):
-        """Actualizar colores y badges de las pruebas según calidad"""
+        """
+        Actualizar colores y badges de las pruebas según calidad
+        
+        Args:
+            quality_info (dict): Diccionario con claves 'PRE' y/o 'POST', cada una con su info de calidad
+        """
         try:
             self.current_quality = quality_info
             
-            if not quality_info or quality_info['grade'] is None:
-                return
-            
-            # Obtener lista de pruebas que deberían eliminarse (sugerencias)
-            suggested_removals = set()
-            if quality_info.get('suggestions'):
-                for suggestion in quality_info['suggestions']:
-                    suggested_removals.add(suggestion['recording_number'])
-            
-            # Determinar color según grado
-            grade = quality_info['grade']
+            # Definir colores por grado
             grade_colors = {
                 'A': QColor(0, 200, 0),      # Verde
                 'B': QColor(150, 200, 0),    # Verde-amarillo
                 'C': QColor(255, 165, 0),    # Naranja
                 'D': QColor(200, 100, 0)     # Naranja-rojo
             }
-            grade_color = grade_colors.get(grade, QColor(128, 128, 128))
             
             # Actualizar cada item en la lista
             for i in range(self.list_test.count()):
                 item = self.list_test.item(i)
                 recording_number = item.data(Qt.UserRole)
                 
-                if recording_number in suggested_removals:
+                # Obtener estado de esta grabación
+                status = self.graph_handler.get_bronchodilator_status(recording_number)
+                
+                # Obtener info de calidad del grupo correcto
+                quality_data = quality_info.get(status)
+                
+                if not quality_data or quality_data.get('grade') is None:
+                    # Sin calidad calculada, mostrar solo status
+                    item.setText(f"Prueba {recording_number} [{status}]")
+                    item.setForeground(QBrush(QColor(0, 0, 0)))  # Negro por defecto
+                    continue
+                
+                grade = quality_data['grade']
+                
+                # Verificar si está en sugerencias de eliminación
+                is_suggested = False
+                if quality_data.get('suggestions'):
+                    for suggestion in quality_data['suggestions']:
+                        if suggestion['recording_number'] == recording_number:
+                            is_suggested = True
+                            break
+                
+                if is_suggested:
                     # Marcar en rojo con asterisco
-                    item.setText(f"Prueba {recording_number}*")
+                    item.setText(f"Prueba {recording_number} [{status}] [{grade}]*")
                     item.setForeground(QBrush(QColor(255, 0, 0)))
                 else:
                     # Marcar con badge de grado y color correspondiente
-                    item.setText(f"Prueba {recording_number} [{grade}]")
+                    item.setText(f"Prueba {recording_number} [{status}] [{grade}]")
+                    grade_color = grade_colors.get(grade, QColor(128, 128, 128))
                     item.setForeground(QBrush(grade_color))
             
         except Exception as e:
@@ -595,10 +714,6 @@ class MainWindow(QMainWindow, Ui_Main):
             self.statusbar.showMessage(f"Error al guardar: {str(e)}")
             print(f"Error en save_data: {str(e)}")
 
-
-
-
-
     @Slot()
     def open_file_dialog(self):
         """Abrir diálogo para seleccionar tipo de archivo a abrir"""
@@ -629,12 +744,6 @@ class MainWindow(QMainWindow, Ui_Main):
             self.file_handler.open_data_file(self)
         else:
             self.statusbar.showMessage("Formato de archivo no reconocido")
-
-
-    """
-    6. AGREGAR NUEVO MÉTODO load_complete_study()
-    ----------------------------------------------
-    """
 
     @Slot(dict)
     def load_complete_study(self, study_data):
@@ -670,11 +779,14 @@ class MainWindow(QMainWindow, Ui_Main):
                 
                 # Agregar a la lista de pruebas
                 self.test_counter += 1
-                test_name = f"Prueba {recording['recording_number']}"
+                rec_num = recording['recording_number']
+                status = recording.get('bronchodilator_status', 'PRE')
+                test_name = f"Prueba {rec_num} [{status}]"
+                
                 from PySide6.QtWidgets import QListWidgetItem
                 from PySide6.QtCore import Qt
                 item = QListWidgetItem(test_name)
-                item.setData(Qt.UserRole, recording['recording_number'])
+                item.setData(Qt.UserRole, rec_num)
                 self.list_test.addItem(item)
             
             # Actualizar contador
@@ -703,10 +815,6 @@ class MainWindow(QMainWindow, Ui_Main):
         except Exception as e:
             self.statusbar.showMessage(f"Error al cargar estudio: {str(e)}")
             print(f"Error en load_complete_study: {str(e)}")
-
-
-
-
 
     @Slot()
     def clear_data(self):
@@ -737,3 +845,42 @@ class MainWindow(QMainWindow, Ui_Main):
             
         # Aceptar el evento de cierre
         event.accept()
+
+    def get_study_data_for_pdf(self):
+        """
+        Obtener todos los datos del estudio formateados para generación de PDF
+        
+        Returns:
+            dict: Diccionario completo con todos los datos necesarios para el PDF
+        """
+        # Obtener todas las grabaciones
+        recordings = self.graph_handler.get_stored_recordings()
+        
+        # Separar por tipo
+        pre_recordings = [r for r in recordings if r.get('bronchodilator_status') == 'PRE']
+        post_recordings = [r for r in recordings if r.get('bronchodilator_status') == 'POST']
+        
+        # Calcular promedios
+        averages_pre = self.graph_handler.calculate_averages('PRE') if pre_recordings else None
+        averages_post = self.graph_handler.calculate_averages('POST') if post_recordings else None
+        
+        # Calcular calidad
+        quality_pre = self.graph_handler.calculate_quality('PRE') if len(pre_recordings) >= 2 else None
+        quality_post = self.graph_handler.calculate_quality('POST') if len(post_recordings) >= 2 else None
+        
+        return {
+            'recordings': {
+                'all': recordings,
+                'pre': pre_recordings,
+                'post': post_recordings
+            },
+            'averages': {
+                'pre': averages_pre,
+                'post': averages_post
+            },
+            'quality': {
+                'pre': quality_pre,
+                'post': quality_post
+            },
+            'line_positions': self.graph_handler.line_positions
+        }
