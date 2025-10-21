@@ -7,6 +7,8 @@ import numpy as np
 class GraphHandler(QWidget):
     # Señal para notificar nueva grabación
     new_recording_created = Signal(int, dict)
+    # Nueva señal para notificar cambios en calidad
+    quality_changed = Signal(dict)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -468,6 +470,160 @@ class GraphHandler(QWidget):
                 if curve_data['curve_pressure']:
                     curve_data['curve_pressure'].setPen(pen)
 
+    def get_pef_for_recording(self, recording_number):
+        """Obtener el PEF de una grabación específica"""
+        if recording_number not in self.line_positions:
+            return None
+        
+        # Guardar datos actuales
+        temp_display = self.display_data.copy()
+        
+        # Cargar datos de la grabación
+        for rec in self.stored_recordings:
+            if rec['recording_number'] == recording_number:
+                self.display_data = rec['data'].copy()
+                break
+        else:
+            self.display_data = temp_display
+            return None
+        
+        # Obtener PEF
+        pef_vol = self.line_positions[recording_number]['v_line_pef']
+        pef_flow, _ = self.get_flow_intersections_at_volume(pef_vol)
+        
+        # Restaurar datos originales
+        self.display_data = temp_display
+        
+        return pef_flow
+
+    def calculate_quality(self):
+        """
+        Calcular la calidad de las maniobras según criterios ATS/ERS
+        Retorna dict con: grade, n_maneuvers, repeatability_ml, suggestions
+        """
+        n_maneuvers = len(self.stored_recordings)
+        
+        if n_maneuvers < 2:
+            return {
+                'grade': None,
+                'n_maneuvers': n_maneuvers,
+                'repeatability_ml': None,
+                'pef_values': [],
+                'suggestions': []
+            }
+        
+        # Obtener PEF de cada maniobra
+        pef_values = []
+        for rec in self.stored_recordings:
+            pef = self.get_pef_for_recording(rec['recording_number'])
+            if pef is not None:
+                pef_values.append({
+                    'recording_number': rec['recording_number'],
+                    'pef': pef
+                })
+        
+        if len(pef_values) < 2:
+            return {
+                'grade': None,
+                'n_maneuvers': n_maneuvers,
+                'repeatability_ml': None,
+                'pef_values': pef_values,
+                'suggestions': []
+            }
+        
+        # Calcular repetibilidad (diferencia max - min en ml)
+        pef_only = [p['pef'] for p in pef_values]
+        repeatability_l = max(pef_only) - min(pef_only)
+        repeatability_ml = repeatability_l * 1000  # Convertir a ml
+        
+        # Determinar grado
+        grade = None
+        if n_maneuvers >= 3:
+            if repeatability_ml < 150:
+                grade = 'A'
+            elif repeatability_ml < 200:
+                grade = 'B'
+        
+        if n_maneuvers >= 2:
+            if grade is None:
+                if repeatability_ml < 200:
+                    grade = 'C'
+                else:
+                    grade = 'D'
+        
+        # Calcular sugerencias de eliminación
+        suggestions = self.calculate_removal_suggestions(pef_values, n_maneuvers, repeatability_ml)
+        
+        return {
+            'grade': grade,
+            'n_maneuvers': n_maneuvers,
+            'repeatability_ml': repeatability_ml,
+            'pef_values': pef_values,
+            'suggestions': suggestions
+        }
+
+    def calculate_removal_suggestions(self, pef_values, current_n, current_repeatability):
+        """
+        Calcular qué maniobras, si se eliminan, mejorarían el grado
+        """
+        suggestions = []
+        
+        if len(pef_values) < 3:
+            return suggestions
+        
+        # Probar eliminar cada maniobra
+        for i, pef_data in enumerate(pef_values):
+            # Crear lista sin esta maniobra
+            remaining = [p for j, p in enumerate(pef_values) if j != i]
+            remaining_pefs = [p['pef'] for p in remaining]
+            
+            new_n = len(remaining)
+            new_repeatability = (max(remaining_pefs) - min(remaining_pefs)) * 1000
+            
+            # Determinar nuevo grado
+            new_grade = None
+            if new_n >= 3:
+                if new_repeatability < 150:
+                    new_grade = 'A'
+                elif new_repeatability < 200:
+                    new_grade = 'B'
+            
+            if new_n >= 2 and new_grade is None:
+                if new_repeatability < 200:
+                    new_grade = 'C'
+                else:
+                    new_grade = 'D'
+            
+            # Si mejora el grado, agregar sugerencia
+            grade_order = {'A': 4, 'B': 3, 'C': 2, 'D': 1, None: 0}
+            current_grade_value = grade_order.get(self.get_current_grade(current_n, current_repeatability), 0)
+            new_grade_value = grade_order.get(new_grade, 0)
+            
+            if new_grade_value > current_grade_value:
+                suggestions.append({
+                    'recording_number': pef_data['recording_number'],
+                    'new_grade': new_grade,
+                    'new_repeatability': new_repeatability
+                })
+        
+        return suggestions
+
+    def get_current_grade(self, n_maneuvers, repeatability_ml):
+        """Obtener grado basado en n y repetibilidad"""
+        if n_maneuvers >= 3:
+            if repeatability_ml < 150:
+                return 'A'
+            elif repeatability_ml < 200:
+                return 'B'
+        
+        if n_maneuvers >= 2:
+            if repeatability_ml < 200:
+                return 'C'
+            else:
+                return 'D'
+        
+        return None
+
     def calculate_averages(self):
         """Calcular promedios de todas las grabaciones almacenadas"""
         if not self.stored_recordings:
@@ -667,6 +823,34 @@ class GraphHandler(QWidget):
                         self.results_list.addItem(f"FEV1/FVC: {averages['fev1_fvc_ratio']:.1f}%")
                     
                     self.results_list.addItem(f"(n={len(self.stored_recordings)})")
+                    self.results_list.addItem("")
+            
+            # Sección de calidad
+            if len(self.stored_recordings) >= 2:
+                quality = self.calculate_quality()
+                
+                self.results_list.addItem("=== CALIDAD ===")
+                
+                if quality['grade']:
+                    self.results_list.addItem(f"Grado: {quality['grade']}")
+                    self.results_list.addItem(f"Maniobras: {quality['n_maneuvers']}")
+                    self.results_list.addItem(f"Repetibilidad: {quality['repeatability_ml']:.0f} ml")
+                    self.results_list.addItem("")
+                    
+                    # Mostrar sugerencias si existen
+                    if quality['suggestions']:
+                        self.results_list.addItem("--- Sugerencia ---")
+                        for suggestion in quality['suggestions']:
+                            rec_num = suggestion['recording_number']
+                            new_grade = suggestion['new_grade']
+                            new_rep = suggestion['new_repeatability']
+                            self.results_list.addItem(f"Eliminar Prueba {rec_num}")
+                            self.results_list.addItem(f"→ Grado: {new_grade}")
+                            self.results_list.addItem(f"→ Rep: {new_rep:.0f} ml")
+                            self.results_list.addItem("")
+                
+                # Emitir señal con información de calidad
+                self.quality_changed.emit(quality)
                 
         except Exception as e:
             print(f"Error actualizando resultados: {e}")

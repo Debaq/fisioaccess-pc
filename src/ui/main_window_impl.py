@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import QMainWindow, QListWidgetItem
 from PySide6.QtCore import QTimer, Slot, Qt
+from PySide6.QtGui import QColor, QBrush
 import serial.tools.list_ports
 from .main_window import Ui_Main
 from serial_comm.serial_handler import SerialHandler  
@@ -16,6 +17,9 @@ class MainWindow(QMainWindow, Ui_Main):
         self.is_calibrated = False
         self.is_testing = False
         self.test_counter = 0
+        
+        # Variable para almacenar info de calidad actual
+        self.current_quality = None
         
         # Iniciar metodos de guardado
         self.file_handler = FileHandler()
@@ -96,6 +100,13 @@ class MainWindow(QMainWindow, Ui_Main):
             print("Señal new_recording_created conectada")
         except Exception as e:
             print(f"Error al conectar new_recording_created: {str(e)}")
+        
+        # Conectar señal de calidad
+        try:
+            self.graph_handler.quality_changed.connect(self.update_test_list_colors)
+            print("Señal quality_changed conectada")
+        except Exception as e:
+            print(f"Error al conectar quality_changed: {str(e)}")
         
         self.btn_start.clicked.connect(self.start_test)
         
@@ -234,6 +245,48 @@ class MainWindow(QMainWindow, Ui_Main):
         except Exception as e:
             self.statusbar.showMessage(f"Error al completar prueba: {str(e)}")
             print(f"Error al completar prueba: {str(e)}")
+
+    @Slot(dict)
+    def update_test_list_colors(self, quality_info):
+        """Actualizar colores y badges de las pruebas según calidad"""
+        try:
+            self.current_quality = quality_info
+            
+            if not quality_info or quality_info['grade'] is None:
+                return
+            
+            # Obtener lista de pruebas que deberían eliminarse (sugerencias)
+            suggested_removals = set()
+            if quality_info.get('suggestions'):
+                for suggestion in quality_info['suggestions']:
+                    suggested_removals.add(suggestion['recording_number'])
+            
+            # Determinar color según grado
+            grade = quality_info['grade']
+            grade_colors = {
+                'A': QColor(0, 200, 0),      # Verde
+                'B': QColor(150, 200, 0),    # Verde-amarillo
+                'C': QColor(255, 165, 0),    # Naranja
+                'D': QColor(200, 100, 0)     # Naranja-rojo
+            }
+            grade_color = grade_colors.get(grade, QColor(128, 128, 128))
+            
+            # Actualizar cada item en la lista
+            for i in range(self.list_test.count()):
+                item = self.list_test.item(i)
+                recording_number = item.data(Qt.UserRole)
+                
+                if recording_number in suggested_removals:
+                    # Marcar en rojo con asterisco
+                    item.setText(f"Prueba {recording_number}*")
+                    item.setForeground(QBrush(QColor(255, 0, 0)))
+                else:
+                    # Marcar con badge de grado y color correspondiente
+                    item.setText(f"Prueba {recording_number} [{grade}]")
+                    item.setForeground(QBrush(grade_color))
+            
+        except Exception as e:
+            print(f"Error actualizando colores de lista: {str(e)}")
 
     @Slot()
     def on_test_selection_changed(self):
@@ -457,6 +510,9 @@ class MainWindow(QMainWindow, Ui_Main):
         # Limpiar la lista de pruebas
         self.list_test.clear()
         self.test_counter = 0
+        
+        # Limpiar info de calidad
+        self.current_quality = None
 
     def closeEvent(self, event):
         """Manejar el cierre de la ventana"""

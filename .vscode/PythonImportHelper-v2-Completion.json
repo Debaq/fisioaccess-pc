@@ -436,6 +436,22 @@
         "documentation": {}
     },
     {
+        "label": "QColor",
+        "importPath": "PySide6.QtGui",
+        "description": "PySide6.QtGui",
+        "isExtraImport": true,
+        "detail": "PySide6.QtGui",
+        "documentation": {}
+    },
+    {
+        "label": "QBrush",
+        "importPath": "PySide6.QtGui",
+        "description": "PySide6.QtGui",
+        "isExtraImport": true,
+        "detail": "PySide6.QtGui",
+        "documentation": {}
+    },
+    {
         "label": "QFont",
         "importPath": "PySide6.QtGui",
         "description": "PySide6.QtGui",
@@ -796,7 +812,7 @@
         "kind": 6,
         "importPath": "src.ui.main_window_impl",
         "description": "src.ui.main_window_impl",
-        "peekOfCode": "class MainWindow(QMainWindow, Ui_Main):\n    def __init__(self):\n        super().__init__()\n        self.setupUi(self)\n        # Variables de estado\n        self.is_calibrated = False\n        self.is_testing = False\n        self.test_counter = 0\n        # Iniciar metodos de guardado\n        self.file_handler = FileHandler()",
+        "peekOfCode": "class MainWindow(QMainWindow, Ui_Main):\n    def __init__(self):\n        super().__init__()\n        self.setupUi(self)\n        # Variables de estado\n        self.is_calibrated = False\n        self.is_testing = False\n        self.test_counter = 0\n        # Variable para almacenar info de calidad actual\n        self.current_quality = None",
         "detail": "src.ui.main_window_impl",
         "documentation": {}
     },
@@ -814,7 +830,7 @@
         "kind": 6,
         "importPath": "src.utils.GraphHandler",
         "description": "src.utils.GraphHandler",
-        "peekOfCode": "class GraphHandler(QWidget):\n    # Señal para notificar nueva grabación\n    new_recording_created = Signal(int, dict)\n    def __init__(self, parent=None):\n        super().__init__(parent)\n        # Layout principal horizontal\n        self.main_layout = QHBoxLayout(self)\n        self.main_layout.setSpacing(5)\n        self.main_layout.setContentsMargins(0, 0, 0, 0)\n        # Crear secciones",
+        "peekOfCode": "class GraphHandler(QWidget):\n    # Señal para notificar nueva grabación\n    new_recording_created = Signal(int, dict)\n    # Nueva señal para notificar cambios en calidad\n    quality_changed = Signal(dict)\n    def __init__(self, parent=None):\n        super().__init__(parent)\n        # Layout principal horizontal\n        self.main_layout = QHBoxLayout(self)\n        self.main_layout.setSpacing(5)",
         "detail": "src.utils.GraphHandler",
         "documentation": {}
     },
