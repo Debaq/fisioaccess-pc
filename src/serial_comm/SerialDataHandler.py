@@ -42,11 +42,11 @@ class SerialDataHandler(QObject):
                 t, p, f, v = map(float, values)
                 
                 # Validar el tiempo
-                if not self.validate_time(t):
-                    error_msg = f"Valor de tiempo inválido ({t}): debe tener al menos 4 dígitos"
-                    self.other_string.emit(error_msg)
-                    print(error_msg)
-                    return
+               #if not self.validate_time(t):
+               #     error_msg = f"Valor de tiempo inválido ({t}): debe tener al menos 4 dígitos"
+               #     self.other_string.emit(error_msg)
+               #     print(error_msg)
+               #     return
                 
                 # Validar que los demás valores sean números razonables
                 if not all(isinstance(x, (int, float)) for x in [p, f, v]):
