@@ -12,7 +12,8 @@ from ui.SaveDialog import SaveDialog
 from utils.NetworkHandler import NetworkHandler
 from utils.QRGenerator import QRGenerator, QRDisplayDialog
 import os
-import tempfile
+from utils.PDFGenerator import PDFGenerator
+
 
 
 class MainWindow(QMainWindow, Ui_Main):
@@ -650,15 +651,19 @@ class MainWindow(QMainWindow, Ui_Main):
                 # Guardar ONLINE
                 self.statusbar.showMessage("Subiendo estudio al servidor...")
                 
-                # Por ahora guardar PDF vacío temporal (después haremos el PDF real)
-                pdf_temp = tempfile.NamedTemporaryFile(
-                    mode='w',
-                    suffix='.pdf',
-                    delete=False
-                )
-                pdf_temp.write("PDF Placeholder")
-                pdf_temp.close()
-                pdf_path = pdf_temp.name
+                pdf_generator = PDFGenerator()
+                study_data_complete = self.get_study_data_for_pdf()
+
+                # Agregar los datos del paciente y análisis
+                study_data_complete['patient'] = patient_data
+                study_data_complete['analysis'] = {
+                    'interpretacion': patient_data.get('interpretacion', ''),
+                    'conclusion': patient_data.get('conclusion', '')
+                }
+                study_data_complete['timestamp'] = datetime.now().isoformat()
+
+                # Generar PDF
+                pdf_path = pdf_generator.generate_pdf(study_data_complete)
                 
                 # Subir archivos
                 response = self.network_handler.upload_files(
