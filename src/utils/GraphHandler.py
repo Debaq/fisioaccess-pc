@@ -135,7 +135,7 @@ class GraphHandler(QWidget):
         self.main_layout.addWidget(results_frame, stretch=1)
     
     def setup_vertical_lines(self):
-        """Configurar las líneas verticales con identificadores simples"""
+        """Configurar las líneas verticales - 5 líneas en total"""
         # Gráfico izquierdo: solo FEV1 (líneas 1 y 2)
         self.vLine1 = pg.InfiniteLine(
             pos=0.5, 
@@ -167,14 +167,15 @@ class GraphHandler(QWidget):
         )
         self.vLine2.setZValue(10)
         
-        # Gráfico derecho: líneas PEF, FEF y FVC con identificadores
+        # Gráfico derecho: 5 líneas compartidas
+        # 1. PEF - solo espiratoria
         self.v_line_pef = pg.InfiniteLine(
             pos=0, 
             angle=90, 
             movable=True,
             pen=pg.mkPen('b', width=2),
             bounds=(0, 7),
-            label="A",
+            label="PEF",
             labelOpts={
                 "position": 0.95,
                 "color": (0, 0, 255),
@@ -183,132 +184,85 @@ class GraphHandler(QWidget):
         )
         self.v_line_pef.setZValue(10)
 
-        self.v_line_fef025 = pg.InfiniteLine(
+        # 2. FEF25/FIF25 - compartida
+        self.v_line_fef25 = pg.InfiniteLine(
             pos=1, 
             angle=90, 
             movable=False,
             pen=pg.mkPen('r', width=2),
             bounds=(0, 7),
-            label="B",
+            label="25%",
             labelOpts={
-                "position": 0.85,
+                "position": 0.5,
                 "color": (255, 0, 0),
                 "fill": (255, 255, 255, 200)
             }
         )
-        self.v_line_fef025.setZValue(10)
+        self.v_line_fef25.setZValue(10)
 
-        self.v_line_fef050 = pg.InfiniteLine(
+        # 3. FEF50/FIF50 - compartida
+        self.v_line_fef50 = pg.InfiniteLine(
             pos=2, 
-            angle=90, 
-            movable=False,
-            pen=pg.mkPen('b', width=2),
-            bounds=(0, 7),
-            label="C",
-            labelOpts={
-                "position": 0.75,
-                "color": (0, 0, 255),
-                "fill": (255, 255, 255, 200)
-            }
-        )
-        self.v_line_fef050.setZValue(10)
-
-        self.v_line_fef075 = pg.InfiniteLine(
-            pos=3, 
             angle=90, 
             movable=False,
             pen=pg.mkPen('g', width=2),
             bounds=(0, 7),
-            label="D",
+            label="50%",
             labelOpts={
-                "position": 0.65,
+                "position": 0.5,
                 "color": (0, 255, 0),
                 "fill": (255, 255, 255, 200)
             }
         )
-        self.v_line_fef075.setZValue(10)
+        self.v_line_fef50.setZValue(10)
 
-        self.v_line_fvc = pg.InfiniteLine(
-            pos=4, 
-            angle=90, 
-            movable=True,
-            pen=pg.mkPen('r', width=2),
-            bounds=(0, 7),
-            label="E",
-            labelOpts={
-                "position": 0.55,
-                "color": (255, 0, 0),
-                "fill": (255, 255, 255, 200)
-            }
-        )
-        self.v_line_fvc.setZValue(10)
-        
-        # Líneas FIF (Flujos Inspiratorios Forzados) - en valores negativos
-        self.v_line_pif = pg.InfiniteLine(
-            pos=0, 
-            angle=90, 
-            movable=True,
-            pen=pg.mkPen('cyan', width=2),
-            bounds=(0, 7),
-            label="F",
-            labelOpts={
-                "position": 0.05,
-                "color": (0, 255, 255),
-                "fill": (255, 255, 255, 200)
-            }
-        )
-        self.v_line_pif.setZValue(10)
-
-        self.v_line_fif050 = pg.InfiniteLine(
-            pos=2, 
+        # 4. FEF75/FIF75 - compartida
+        self.v_line_fef75 = pg.InfiniteLine(
+            pos=3, 
             angle=90, 
             movable=False,
-            pen=pg.mkPen('magenta', width=2),
+            pen=pg.mkPen('m', width=2),
             bounds=(0, 7),
-            label="G",
+            label="75%",
             labelOpts={
-                "position": 0.15,
+                "position": 0.5,
                 "color": (255, 0, 255),
                 "fill": (255, 255, 255, 200)
             }
         )
-        self.v_line_fif050.setZValue(10)
+        self.v_line_fef75.setZValue(10)
 
-        self.v_line_fivc = pg.InfiniteLine(
+        # 5. FVC - solo espiratoria
+        self.v_line_fvc = pg.InfiniteLine(
             pos=4, 
             angle=90, 
             movable=True,
             pen=pg.mkPen('orange', width=2),
             bounds=(0, 7),
-            label="H",
+            label="FVC",
             labelOpts={
-                "position": 0.25,
+                "position": 0.95,
                 "color": (255, 165, 0),
                 "fill": (255, 255, 255, 200)
             }
         )
-        self.v_line_fivc.setZValue(10)
+        self.v_line_fvc.setZValue(10)
         
         # Agregar líneas a los gráficos
         self.flow_time_plot.addItem(self.vLine1)
         self.flow_time_plot.addItem(self.vLine2)
         
         self.flow_pressure_plot.addItem(self.v_line_pef)
-        self.flow_pressure_plot.addItem(self.v_line_fef025)
-        self.flow_pressure_plot.addItem(self.v_line_fef050)
-        self.flow_pressure_plot.addItem(self.v_line_fef075)
+        self.flow_pressure_plot.addItem(self.v_line_fef25)
+        self.flow_pressure_plot.addItem(self.v_line_fef50)
+        self.flow_pressure_plot.addItem(self.v_line_fef75)
         self.flow_pressure_plot.addItem(self.v_line_fvc)
-        self.flow_pressure_plot.addItem(self.v_line_pif)
-        self.flow_pressure_plot.addItem(self.v_line_fif050)
-        self.flow_pressure_plot.addItem(self.v_line_fivc)
         
         # Conectar señales
         self.vLine1.sigPositionChanged.connect(self.update_results_display)
         self.vLine2.sigPositionChanged.connect(self.update_results_display)
-        self.v_line_pef.sigPositionChanged.connect(self.update_line_pef_fvc)
-        self.v_line_fvc.sigPositionChanged.connect(self.update_line_pef_fvc)
-        self.v_line_pif.sigPositionChanged.connect(self.update_line_pif_fivc)
-        self.v_line_fivc.sigPositionChanged.connect(self.update_line_pif_fivc)
+        self.v_line_pef.sigPositionChanged.connect(self.update_fef_lines)
+        self.v_line_fvc.sigPositionChanged.connect(self.update_fef_lines)
 
     def get_flow_at_volume(self, volume_pos):
         """Obtener el valor de flujo en una posición de volumen específica"""
@@ -333,6 +287,43 @@ class GraphHandler(QWidget):
             return f_interp
 
         return None
+
+    def get_flow_intersections_at_volume(self, volume_pos):
+        """
+        Obtener ambas intersecciones de flujo (positiva y negativa) en una posición de volumen.
+        Retorna (flujo_positivo, flujo_negativo) o (None, None) si no hay datos
+        """
+        if not self.display_data['v'] or not self.display_data['f']:
+            return None, None
+
+        v_data = np.array(self.display_data['v'])
+        f_data = np.array(self.display_data['f'])
+
+        # Encontrar todas las intersecciones cercanas a este volumen
+        intersections = []
+        tolerance = 0.05  # Tolerancia para considerar el mismo volumen
+        
+        for i in range(1, len(v_data)):
+            # Si el volumen está entre v[i-1] y v[i]
+            if min(v_data[i-1], v_data[i]) <= volume_pos <= max(v_data[i-1], v_data[i]):
+                # Interpolar el flujo
+                if v_data[i] != v_data[i-1]:
+                    t = (volume_pos - v_data[i-1]) / (v_data[i] - v_data[i-1])
+                    flow_interp = f_data[i-1] + t * (f_data[i] - f_data[i-1])
+                    intersections.append(flow_interp)
+        
+        if not intersections:
+            return None, None
+        
+        # Separar en positivos y negativos
+        positive_flows = [f for f in intersections if f > 0]
+        negative_flows = [f for f in intersections if f < 0]
+        
+        # Tomar el máximo positivo y el mínimo negativo (más negativo)
+        flow_positive = max(positive_flows) if positive_flows else None
+        flow_negative = min(negative_flows) if negative_flows else None
+        
+        return flow_positive, flow_negative
 
     def setup_curve_styles(self):
         """Configurar las curvas de los gráficos"""
@@ -369,7 +360,7 @@ class GraphHandler(QWidget):
 
         return None
 
-    def update_line_pef_fvc(self):
+    def update_fef_lines(self):
         """Actualizar las líneas FEF cuando cambian PEF o FVC"""
         try:
             pef_vol = self.v_line_pef.value()
@@ -378,32 +369,15 @@ class GraphHandler(QWidget):
             # Calcular posiciones de FEF
             diff = (fvc_vol - pef_vol) / 4
             
-            self.v_line_fef025.setValue(pef_vol + diff)
-            self.v_line_fef050.setValue(pef_vol + diff * 2)
-            self.v_line_fef075.setValue(pef_vol + diff * 3)
+            self.v_line_fef25.setValue(pef_vol + diff)
+            self.v_line_fef50.setValue(pef_vol + diff * 2)
+            self.v_line_fef75.setValue(pef_vol + diff * 3)
             
             # Actualizar display de resultados
             self.update_results_display()
                 
         except Exception as e:
-            print(f"Error actualizando líneas PEF/FVC: {e}")
-
-    def update_line_pif_fivc(self):
-        """Actualizar las líneas FIF cuando cambian PIF o FIVC"""
-        try:
-            pif_vol = self.v_line_pif.value()
-            fivc_vol = self.v_line_fivc.value()
-            
-            # Calcular posición de FIF50
-            fif050_vol = pif_vol + (fivc_vol - pif_vol) / 2
-            
-            self.v_line_fif050.setValue(fif050_vol)
-            
-            # Actualizar display de resultados
-            self.update_results_display()
-                
-        except Exception as e:
-            print(f"Error actualizando líneas PIF/FIVC: {e}")
+            print(f"Error actualizando líneas FEF: {e}")
 
     def save_line_positions(self, recording_number):
         """Guardar las posiciones actuales de las líneas para una grabación"""
@@ -414,9 +388,7 @@ class GraphHandler(QWidget):
             'vLine1': self.vLine1.value(),
             'vLine2': self.vLine2.value(),
             'v_line_pef': self.v_line_pef.value(),
-            'v_line_fvc': self.v_line_fvc.value(),
-            'v_line_pif': self.v_line_pif.value(),
-            'v_line_fivc': self.v_line_fivc.value()
+            'v_line_fvc': self.v_line_fvc.value()
         }
 
     def restore_line_positions(self, recording_number):
@@ -427,8 +399,6 @@ class GraphHandler(QWidget):
             self.vLine2.setValue(1.5)
             self.v_line_pef.setValue(0)
             self.v_line_fvc.setValue(4)
-            self.v_line_pif.setValue(0)
-            self.v_line_fivc.setValue(4)
             return
             
         positions = self.line_positions[recording_number]
@@ -436,12 +406,9 @@ class GraphHandler(QWidget):
         self.vLine2.setValue(positions['vLine2'])
         self.v_line_pef.setValue(positions['v_line_pef'])
         self.v_line_fvc.setValue(positions['v_line_fvc'])
-        self.v_line_pif.setValue(positions['v_line_pif'])
-        self.v_line_fivc.setValue(positions['v_line_fivc'])
         
         # Esto actualizará automáticamente las líneas dependientes
-        self.update_line_pef_fvc()
-        self.update_line_pif_fivc()
+        self.update_fef_lines()
 
     def set_active_recording(self, recording_number):
         """Establecer una grabación como activa y actualizar visualización"""
@@ -513,9 +480,9 @@ class GraphHandler(QWidget):
             'fef50': [],
             'fef75': [],
             'fvc': [],
-            'pif': [],
+            'fif25': [],
             'fif50': [],
-            'fivc': [],
+            'fif75': [],
             'fev1_fvc_ratio': []
         }
         
@@ -539,47 +506,42 @@ class GraphHandler(QWidget):
                 if y1 is not None and y2 is not None:
                     metrics['fev1'].append(abs(y2 - y1))
                 
-                # PEF, FEF, FVC
+                # PEF y FVC
                 pef_vol = positions['v_line_pef']
                 fvc_vol = positions['v_line_fvc']
                 
-                pef_flow = self.get_flow_at_volume(pef_vol)
+                pef_flow, _ = self.get_flow_intersections_at_volume(pef_vol)
                 if pef_flow is not None:
                     metrics['pef'].append(pef_flow)
                 
-                # Calcular posiciones FEF
+                metrics['fvc'].append(fvc_vol)
+                
+                # Calcular posiciones FEF/FIF
                 diff = (fvc_vol - pef_vol) / 4
                 fef25_vol = pef_vol + diff
                 fef50_vol = pef_vol + diff * 2
                 fef75_vol = pef_vol + diff * 3
                 
-                fef25_flow = self.get_flow_at_volume(fef25_vol)
-                fef50_flow = self.get_flow_at_volume(fef50_vol)
-                fef75_flow = self.get_flow_at_volume(fef75_vol)
-                
+                # FEF25/FIF25
+                fef25_flow, fif25_flow = self.get_flow_intersections_at_volume(fef25_vol)
                 if fef25_flow is not None:
                     metrics['fef25'].append(fef25_flow)
+                if fif25_flow is not None:
+                    metrics['fif25'].append(abs(fif25_flow))
+                
+                # FEF50/FIF50
+                fef50_flow, fif50_flow = self.get_flow_intersections_at_volume(fef50_vol)
                 if fef50_flow is not None:
                     metrics['fef50'].append(fef50_flow)
-                if fef75_flow is not None:
-                    metrics['fef75'].append(fef75_flow)
-                
-                metrics['fvc'].append(fvc_vol)
-                
-                # PIF, FIF, FIVC
-                pif_vol = positions['v_line_pif']
-                fivc_vol = positions['v_line_fivc']
-                
-                pif_flow = self.get_flow_at_volume(pif_vol)
-                if pif_flow is not None:
-                    metrics['pif'].append(abs(pif_flow))
-                
-                fif50_vol = pif_vol + (fivc_vol - pif_vol) / 2
-                fif50_flow = self.get_flow_at_volume(fif50_vol)
                 if fif50_flow is not None:
                     metrics['fif50'].append(abs(fif50_flow))
                 
-                metrics['fivc'].append(fivc_vol)
+                # FEF75/FIF75
+                fef75_flow, fif75_flow = self.get_flow_intersections_at_volume(fef75_vol)
+                if fef75_flow is not None:
+                    metrics['fef75'].append(fef75_flow)
+                if fif75_flow is not None:
+                    metrics['fif75'].append(abs(fif75_flow))
                 
                 # FEV1/FVC ratio
                 if metrics['fev1'] and metrics['fvc'][-1] > 0:
@@ -611,7 +573,7 @@ class GraphHandler(QWidget):
                 self.results_list.addItem("=== Curva Actual ===")
             
             # Gráfico izquierdo (Volumen vs Tiempo)
-            self.results_list.addItem("--- Gráfico 1 ---")
+            self.results_list.addItem("--- FEV1 ---")
             
             x1 = self.vLine1.value()
             x2 = self.vLine2.value()
@@ -626,45 +588,41 @@ class GraphHandler(QWidget):
                 self.results_list.addItem("")
             
             # Gráfico derecho (Flujo vs Volumen)
-            self.results_list.addItem("--- Gráfico 2 ---")
+            self.results_list.addItem("--- Espirometría ---")
             
-            # FEF (Flujos Espiratorios)
+            # PEF
             pef_vol = self.v_line_pef.value()
-            fvc_vol = self.v_line_fvc.value()
-            
-            pef_flow = self.get_flow_at_volume(pef_vol)
-            fef25_flow = self.get_flow_at_volume(self.v_line_fef025.value())
-            fef50_flow = self.get_flow_at_volume(self.v_line_fef050.value())
-            fef75_flow = self.get_flow_at_volume(self.v_line_fef075.value())
-            
+            pef_flow, _ = self.get_flow_intersections_at_volume(pef_vol)
             if pef_flow is not None:
-                self.results_list.addItem(f"A - PEF: {pef_flow:.3f} L/s")
+                self.results_list.addItem(f"PEF: {pef_flow:.3f} L/s")
+            
+            # FEF25/FIF25
+            fef25_vol = self.v_line_fef25.value()
+            fef25_flow, fif25_flow = self.get_flow_intersections_at_volume(fef25_vol)
             if fef25_flow is not None:
-                self.results_list.addItem(f"B - FEF25: {fef25_flow:.3f} L/s")
+                self.results_list.addItem(f"FEF25: {fef25_flow:.3f} L/s")
+            if fif25_flow is not None:
+                self.results_list.addItem(f"FIF25: {abs(fif25_flow):.3f} L/s")
+            
+            # FEF50/FIF50
+            fef50_vol = self.v_line_fef50.value()
+            fef50_flow, fif50_flow = self.get_flow_intersections_at_volume(fef50_vol)
             if fef50_flow is not None:
-                fef50_vol = self.v_line_fef050.value()
-                self.results_list.addItem(f"C - FEF50: {fef50_flow:.3f} L/s @ {fef50_vol:.3f} L")
-            if fef75_flow is not None:
-                fef75_vol = self.v_line_fef075.value()
-                self.results_list.addItem(f"D - FEF75: {fef75_flow:.3f} L/s @ {fef75_vol:.3f} L")
-            
-            self.results_list.addItem(f"E - FVC: {fvc_vol:.3f} L")
-            self.results_list.addItem("")
-            
-            # FIF (Flujos Inspiratorios)
-            pif_vol = self.v_line_pif.value()
-            fivc_vol = self.v_line_fivc.value()
-            
-            pif_flow = self.get_flow_at_volume(pif_vol)
-            fif50_flow = self.get_flow_at_volume(self.v_line_fif050.value())
-            
-            if pif_flow is not None:
-                self.results_list.addItem(f"F - PIF: {abs(pif_flow):.3f} L/s")
+                self.results_list.addItem(f"FEF50: {fef50_flow:.3f} L/s")
             if fif50_flow is not None:
-                fif50_vol = self.v_line_fif050.value()
-                self.results_list.addItem(f"G - FIF50: {abs(fif50_flow):.3f} L/s @ {fif50_vol:.3f} L")
+                self.results_list.addItem(f"FIF50: {abs(fif50_flow):.3f} L/s")
             
-            self.results_list.addItem(f"H - FIVC: {fivc_vol:.3f} L")
+            # FEF75/FIF75
+            fef75_vol = self.v_line_fef75.value()
+            fef75_flow, fif75_flow = self.get_flow_intersections_at_volume(fef75_vol)
+            if fef75_flow is not None:
+                self.results_list.addItem(f"FEF75: {fef75_flow:.3f} L/s")
+            if fif75_flow is not None:
+                self.results_list.addItem(f"FIF75: {abs(fif75_flow):.3f} L/s")
+            
+            # FVC
+            fvc_vol = self.v_line_fvc.value()
+            self.results_list.addItem(f"FVC: {fvc_vol:.3f} L")
             self.results_list.addItem("")
             
             # Calcular FEV1/FVC si hay datos
@@ -684,23 +642,24 @@ class GraphHandler(QWidget):
                         self.results_list.addItem(f"FEV1: {averages['fev1']:.3f} L")
                     if averages['pef'] is not None:
                         self.results_list.addItem(f"PEF: {averages['pef']:.3f} L/s")
+                    
                     if averages['fef25'] is not None:
                         self.results_list.addItem(f"FEF25: {averages['fef25']:.3f} L/s")
+                    if averages['fif25'] is not None:
+                        self.results_list.addItem(f"FIF25: {averages['fif25']:.3f} L/s")
+                    
                     if averages['fef50'] is not None:
                         self.results_list.addItem(f"FEF50: {averages['fef50']:.3f} L/s")
-                    if averages['fef75'] is not None:
-                        self.results_list.addItem(f"FEF75: {averages['fef75']:.3f} L/s")
-                    if averages['fvc'] is not None:
-                        self.results_list.addItem(f"FVC: {averages['fvc']:.3f} L")
-                    
-                    self.results_list.addItem("")
-                    
-                    if averages['pif'] is not None:
-                        self.results_list.addItem(f"PIF: {averages['pif']:.3f} L/s")
                     if averages['fif50'] is not None:
                         self.results_list.addItem(f"FIF50: {averages['fif50']:.3f} L/s")
-                    if averages['fivc'] is not None:
-                        self.results_list.addItem(f"FIVC: {averages['fivc']:.3f} L")
+                    
+                    if averages['fef75'] is not None:
+                        self.results_list.addItem(f"FEF75: {averages['fef75']:.3f} L/s")
+                    if averages['fif75'] is not None:
+                        self.results_list.addItem(f"FIF75: {averages['fif75']:.3f} L/s")
+                    
+                    if averages['fvc'] is not None:
+                        self.results_list.addItem(f"FVC: {averages['fvc']:.3f} L")
                     
                     self.results_list.addItem("")
                     
@@ -918,8 +877,6 @@ class GraphHandler(QWidget):
         self.vLine2.setValue(1.5)
         self.v_line_pef.setValue(0)
         self.v_line_fvc.setValue(4)
-        self.v_line_pif.setValue(0)
-        self.v_line_fivc.setValue(4)
         
         self.graph_record = True
         self.update_results_display()
