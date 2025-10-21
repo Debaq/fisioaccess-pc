@@ -169,24 +169,10 @@ class MainWindow(QMainWindow, Ui_Main):
         else:
             self.statusbar.showMessage(f"Dispositivo: {data}")
 
+
     @Slot()
     def start_test(self):
         """Iniciar una nueva prueba"""
-        
-        try:
-            if self.serial_handler:
-                # Asegurar que la lectura esté activa
-                if not hasattr(self.serial_handler, 'reader_thread') or self.serial_handler.reader_thread is None:
-                    self.serial_handler.start_reading()
-                
-                # Enviar comando de calibración
-                self.serial_handler.write_data("v")
-                self.statusbar.showMessage("Enviando comando de volumen...")
-                self.graph_handler.reset_data()
-                #self.graph_handler.start_time= None
-                
-        except:
-            pass
         
         if not self.is_calibrated:
             self.statusbar.showMessage("Debe calibrar antes de iniciar una prueba")
@@ -196,13 +182,17 @@ class MainWindow(QMainWindow, Ui_Main):
             self.is_testing = True
             self.update_button_states()
             
-            # Iniciar nueva grabación
-            self.graph_handler.start_new_recording()
+            # ORDEN CORRECTO:
+            # 1. Preparar el GraphHandler ANTES de enviar comando al hardware
+            self.graph_handler.prepare_new_recording()  # Nuevo método
             
-            # La lectura ya debe estar activa desde la calibración
-            # No necesitamos llamar start_reading() aquí
-            
-            self.statusbar.showMessage("Prueba iniciada...")
+            # 2. Enviar comando al hardware
+            if self.serial_handler:
+                if not hasattr(self.serial_handler, 'reader_thread') or self.serial_handler.reader_thread is None:
+                    self.serial_handler.start_reading()
+                
+                self.serial_handler.write_data("v")
+                self.statusbar.showMessage("Comando de reset enviado, iniciando prueba...")
             
         except Exception as e:
             self.is_testing = False

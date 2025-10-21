@@ -379,8 +379,9 @@ class GraphHandler(QWidget):
         except Exception as e:
             print(f"Error actualizando líneas: {e}")
 
-    def start_new_recording(self):
-        """Activar nueva grabación - debe llamarse manualmente"""
+
+    def prepare_new_recording(self):
+        """Preparar el sistema para una nueva grabación - llamar ANTES de reset hardware"""
         if self.recording_count >= self.max_recordings:
             print(f"No se pueden crear más grabaciones. Máximo: {self.max_recordings}")
             return False
@@ -388,9 +389,25 @@ class GraphHandler(QWidget):
         if self.recording_started:
             print("Ya hay una grabación en curso")
             return False
-            
+        
+        # Limpiar datos de display
+        self.display_data = {
+            't': [],
+            'p': [],
+            'f': [],
+            'v': []
+        }
+        
+        # Resetear variables de control
+        self.recording_started = False
+        self.start_time = None  # ← CRÍTICO: resetear para que tome el nuevo timestamp
         self.ready_for_new_recording = True
-        print(f"Sistema listo para nueva grabación {self.recording_count + 1}")
+        
+        # Limpiar último timestamp para detección de reset
+        if hasattr(self, 'last_timestamp'):
+            delattr(self, 'last_timestamp')
+        
+        print(f"Sistema preparado para grabación {self.recording_count + 1}")
         return True
 
     def store_current_recording(self):
@@ -512,57 +529,42 @@ class GraphHandler(QWidget):
             if not self.graph_record:
                 return
 
-            # Verificar si ya se alcanzó el máximo de grabaciones
             if self.recording_count >= self.max_recordings:
                 return
 
-            # El volumen ya viene en litros desde el equipo
             volume = new_data.get('v', 0)
             t_raw = new_data.get('t', 0)
 
-            # Detectar reset de placa: si timestamp actual es mucho menor que el anterior
-            if hasattr(self, 'last_timestamp') and t_raw < self.last_timestamp * 0.1 and self.last_timestamp > 1000:
-                self.start_time = None  # Forzar recálculo
-                self.recording_started = False  # Reiniciar grabación
-                print(f"DEBUG: Reset de placa detectado, timestamp: {t_raw}, último: {self.last_timestamp}")
-                
             # Actualizar último timestamp
             self.last_timestamp = t_raw
 
             # Si aún no ha empezado a grabar, esperar volumen positivo Y activación manual
             if not self.recording_started:
-                if volume > 0 and self.ready_for_new_recording:  # Requiere activación manual
+                if volume > 0.01 and self.ready_for_new_recording:  # Umbral pequeño
                     self.recording_started = True
-                    self.start_time = t_raw  # Usar el timestamp actual como referencia
-                    # Limpiar solo los datos actuales
-                    for key in self.display_data:
-                        self.display_data[key] = []
+                    self.start_time = t_raw
                     print(f"DEBUG: Grabación {self.recording_count + 1} iniciada con start_time={self.start_time}")
                 return
 
             # ---------- grabación activa ----------
-            t_rel = (t_raw - self.start_time) / 1000.0  # ms → s (tiempo relativo desde inicio)
+            t_rel = (t_raw - self.start_time) / 1000.0
 
-            # Verificar tiempo negativo
+            # Si tiempo negativo, hay un problema de sincronización
             if t_rel < 0:
-                print(f"Tiempo negativo detectado: {t_rel} - IGNORANDO DATO")
+                print(f"ADVERTENCIA: Tiempo negativo {t_rel} - dato descartado")
                 return
 
-            # Verificar si se cumplieron los 3 segundos
+            # Verificar duración
             if t_rel >= self.recording_duration:
-                # Almacenar la grabación actual
                 self.store_current_recording()
-                
-                # Reiniciar para la siguiente grabación
                 self.recording_started = False
                 self.start_time = None
-                self.ready_for_new_recording = False  # Desactivar hasta nueva activación manual
+                self.ready_for_new_recording = False
                 self.recording_count += 1
-                
                 print(f"Grabación completada. Total: {self.recording_count}/{self.max_recordings}")
                 return
 
-            # Agregar datos actuales
+            # Agregar datos
             self.display_data['t'].append(t_rel)
             self.display_data['v'].append(volume)
 
@@ -574,6 +576,7 @@ class GraphHandler(QWidget):
 
         except Exception as e:
             print(f"Error en update_data: {e}")
+        
 
     def update_plots(self):
         """Actualizar ambos gráficos"""
