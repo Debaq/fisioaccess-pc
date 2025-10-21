@@ -8,6 +8,13 @@ from serial_comm.SerialDataHandler import SerialDataHandler
 from utils.GraphHandler import GraphHandler
 from utils.FileHandler import FileHandler
 
+from ui.SaveDialog import SaveDialog
+from utils.NetworkHandler import NetworkHandler
+from utils.QRGenerator import QRGenerator, QRDisplayDialog
+import os
+import tempfile
+
+
 class MainWindow(QMainWindow, Ui_Main):
     def __init__(self):
         super().__init__()
@@ -23,6 +30,10 @@ class MainWindow(QMainWindow, Ui_Main):
         
         # Iniciar metodos de guardado
         self.file_handler = FileHandler()
+        
+        self.network_handler = NetworkHandler()
+        self.qr_generator = QRGenerator()
+
         # Inicializar el manejador serial
         self.serial_handler = SerialHandler()
         self.data_handler = SerialDataHandler()
@@ -53,6 +64,8 @@ class MainWindow(QMainWindow, Ui_Main):
         
         self.file_handler.save_status.connect(self.statusbar.showMessage)
         self.file_handler.error_occurred.connect(self.statusbar.showMessage)
+        self.file_handler.complete_study_loaded.connect(self.load_complete_study)
+
         self.btn_save.clicked.connect(self.save_data)
 
         self.btn_clear.clicked.connect(self.clear_data)
@@ -61,7 +74,7 @@ class MainWindow(QMainWindow, Ui_Main):
         self.btn_cal.clicked.connect(self.calibrate)
         
         # Conectar el botón de abrir
-        self.btn_open.clicked.connect(self.open_data)
+        self.btn_open.clicked.connect(self.open_file_dialog)
         
         # Conectar la señal de datos cargados del file_handler
         self.file_handler.data_loaded.connect(self.load_data_to_graph)
@@ -430,16 +443,6 @@ class MainWindow(QMainWindow, Ui_Main):
             except Exception as e:
                 self.statusbar.showMessage(f"Error al desconectar: {str(e)}")
 
-    @Slot()
-    def open_data(self):
-        """Abrir y cargar datos desde un archivo"""
-        # Desconectar del puerto serial si está conectado
-        if self.btn_connect.isChecked():
-            self.btn_connect.setChecked(False)
-            self.handle_connection()
-        
-        # Abrir archivo
-        self.file_handler.open_data_file(self)
 
     @Slot(dict)
     def load_data_to_graph(self, data):
@@ -485,18 +488,225 @@ class MainWindow(QMainWindow, Ui_Main):
             self.btn_connect.setChecked(False)
             self.handle_connection()
 
+
     @Slot()
     def save_data(self):
-        """Guardar datos actuales en CSV"""
-        # Si hay una curva activa, guardar esa
-        if self.graph_handler.active_recording_number is not None:
-            self.file_handler.save_data_to_csv(self, self.graph_handler.display_data)
-        else:
-            # Si no hay curva activa pero hay datos en display_data
-            if self.graph_handler.display_data['t']:
-                self.file_handler.save_data_to_csv(self, self.graph_handler.display_data)
+        """Guardar estudio completo con datos del paciente"""
+        
+        # Verificar que hay datos para guardar
+        if not self.graph_handler.stored_recordings:
+            self.statusbar.showMessage("No hay grabaciones para guardar")
+            return
+        
+        # Abrir diálogo para solicitar datos
+        dialog = SaveDialog(self)
+        
+        if dialog.exec() != SaveDialog.Accepted:
+            return
+        
+        # Obtener datos del paciente
+        patient_data = dialog.get_data()
+        
+        if not patient_data:
+            self.statusbar.showMessage("No se ingresaron datos del paciente")
+            return
+        
+        try:
+            # Generar archivo RAW
+            self.statusbar.showMessage("Generando archivo de datos...")
+            raw_path = self.file_handler.generate_raw_file(
+                self.graph_handler,
+                patient_data
+            )
+            
+            if not raw_path:
+                self.statusbar.showMessage("Error al generar archivo de datos")
+                return
+            
+            # Verificar conectividad
+            self.statusbar.showMessage("Verificando conexión a internet...")
+            has_internet = self.network_handler.check_connectivity()
+            
+            if has_internet:
+                # Guardar ONLINE
+                self.statusbar.showMessage("Subiendo estudio al servidor...")
+                
+                # Por ahora guardar PDF vacío temporal (después haremos el PDF real)
+                pdf_temp = tempfile.NamedTemporaryFile(
+                    mode='w',
+                    suffix='.pdf',
+                    delete=False
+                )
+                pdf_temp.write("PDF Placeholder")
+                pdf_temp.close()
+                pdf_path = pdf_temp.name
+                
+                # Subir archivos
+                response = self.network_handler.upload_files(
+                    pdf_path,
+                    raw_path,
+                    patient_data
+                )
+                
+                # Limpiar archivo temporal PDF
+                if os.path.exists(pdf_path):
+                    os.remove(pdf_path)
+                
+                if response:
+                    # Obtener URL de la respuesta
+                    # Ajustar según el formato real de respuesta del servidor
+                    url = response.get('url', '') or response.get('link', '')
+                    
+                    if url:
+                        # Generar QR
+                        qr_pixmap = self.qr_generator.generate_qr_image(url)
+                        
+                        # Mostrar diálogo con QR
+                        qr_dialog = QRDisplayDialog(url, qr_pixmap, self)
+                        qr_dialog.exec()
+                        
+                        self.statusbar.showMessage("¡Estudio guardado exitosamente en línea!")
+                    else:
+                        self.statusbar.showMessage("Subido pero sin URL de respuesta")
+                else:
+                    # Si falla, guardar offline como backup
+                    self.statusbar.showMessage("Error al subir, guardando offline...")
+                    self.file_handler.save_study_offline(raw_path, patient_data)
+            
             else:
-                self.statusbar.showMessage("No hay datos para guardar. Seleccione una prueba primero.")
+                # Guardar OFFLINE
+                self.statusbar.showMessage("Sin conexión, guardando offline...")
+                offline_path = self.file_handler.save_study_offline(raw_path, patient_data)
+                
+                if offline_path:
+                    from PySide6.QtWidgets import QMessageBox
+                    QMessageBox.information(
+                        self,
+                        "Guardado Offline",
+                        f"El estudio se guardó localmente en:\n\n{offline_path}\n\n"
+                        f"Podrás subirlo más tarde cuando tengas conexión."
+                    )
+            
+            # Limpiar archivo temporal RAW
+            if os.path.exists(raw_path):
+                os.remove(raw_path)
+                
+        except Exception as e:
+            self.statusbar.showMessage(f"Error al guardar: {str(e)}")
+            print(f"Error en save_data: {str(e)}")
+
+
+
+
+
+    @Slot()
+    def open_file_dialog(self):
+        """Abrir diálogo para seleccionar tipo de archivo a abrir"""
+        from PySide6.QtWidgets import QFileDialog
+        
+        # Desconectar del puerto serial si está conectado
+        if self.btn_connect.isChecked():
+            self.btn_connect.setChecked(False)
+            self.handle_connection()
+        
+        # Abrir diálogo genérico que acepta CSV y JSON
+        file_path, selected_filter = QFileDialog.getOpenFileName(
+            self,
+            "Abrir Archivo",
+            os.path.expanduser("~/Documents"),
+            "Estudios Completos (*.json);;Archivos CSV Legacy (*.csv);;Todos los archivos (*.*)"
+        )
+        
+        if not file_path:
+            return
+        
+        # Determinar tipo de archivo por extensión
+        if file_path.endswith('.json'):
+            # Cargar estudio completo
+            self.file_handler.open_complete_study(self)
+        elif file_path.endswith('.csv'):
+            # Cargar CSV legacy
+            self.file_handler.open_data_file(self)
+        else:
+            self.statusbar.showMessage("Formato de archivo no reconocido")
+
+
+    """
+    6. AGREGAR NUEVO MÉTODO load_complete_study()
+    ----------------------------------------------
+    """
+
+    @Slot(dict)
+    def load_complete_study(self, study_data):
+        """
+        Cargar estudio completo con múltiples grabaciones
+        
+        Args:
+            study_data (dict): Datos completos del estudio
+        """
+        try:
+            # Limpiar estado actual
+            self.graph_handler.clear_data()
+            self.list_test.clear()
+            self.test_counter = 0
+            
+            # Cargar grabaciones
+            recordings = study_data.get('recordings', [])
+            line_positions = study_data.get('line_positions', {})
+            
+            if not recordings:
+                self.statusbar.showMessage("El archivo no contiene grabaciones")
+                return
+            
+            # Restaurar grabaciones en el GraphHandler
+            self.graph_handler.stored_recordings = recordings
+            self.graph_handler.line_positions = {
+                int(k): v for k, v in line_positions.items()
+            }
+            
+            # Recrear curvas permanentes
+            for recording in recordings:
+                self.graph_handler.add_permanent_curve(recording)
+                
+                # Agregar a la lista de pruebas
+                self.test_counter += 1
+                test_name = f"Prueba {recording['recording_number']}"
+                from PySide6.QtWidgets import QListWidgetItem
+                from PySide6.QtCore import Qt
+                item = QListWidgetItem(test_name)
+                item.setData(Qt.UserRole, recording['recording_number'])
+                self.list_test.addItem(item)
+            
+            # Actualizar contador
+            self.graph_handler.recording_count = len(recordings)
+            
+            # Activar primera grabación
+            if recordings:
+                first_recording = recordings[0]['recording_number']
+                self.graph_handler.set_active_recording(first_recording)
+                self.list_test.setCurrentRow(0)
+            
+            # Mostrar información del paciente en statusbar
+            patient = study_data.get('patient', {})
+            nombre = patient.get('nombre', 'Desconocido')
+            rut = patient.get('rut', '')
+            
+            self.statusbar.showMessage(
+                f"Estudio cargado: {nombre} ({rut}) - {len(recordings)} grabaciones"
+            )
+            
+            # Deshabilitar botones de control serial
+            self.is_testing = False
+            self.is_calibrated = False
+            self.update_button_states()
+            
+        except Exception as e:
+            self.statusbar.showMessage(f"Error al cargar estudio: {str(e)}")
+            print(f"Error en load_complete_study: {str(e)}")
+
+
+
+
 
     @Slot()
     def clear_data(self):

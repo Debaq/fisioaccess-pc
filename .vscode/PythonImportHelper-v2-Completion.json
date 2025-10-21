@@ -900,6 +900,56 @@
         "documentation": {}
     },
     {
+        "label": "SaveDialog",
+        "importPath": "ui.SaveDialog",
+        "description": "ui.SaveDialog",
+        "isExtraImport": true,
+        "detail": "ui.SaveDialog",
+        "documentation": {}
+    },
+    {
+        "label": "NetworkHandler",
+        "importPath": "utils.NetworkHandler",
+        "description": "utils.NetworkHandler",
+        "isExtraImport": true,
+        "detail": "utils.NetworkHandler",
+        "documentation": {}
+    },
+    {
+        "label": "QRGenerator",
+        "importPath": "utils.QRGenerator",
+        "description": "utils.QRGenerator",
+        "isExtraImport": true,
+        "detail": "utils.QRGenerator",
+        "documentation": {}
+    },
+    {
+        "label": "QRDisplayDialog",
+        "importPath": "utils.QRGenerator",
+        "description": "utils.QRGenerator",
+        "isExtraImport": true,
+        "detail": "utils.QRGenerator",
+        "documentation": {}
+    },
+    {
+        "label": "os",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "os",
+        "description": "os",
+        "detail": "os",
+        "documentation": {}
+    },
+    {
+        "label": "tempfile",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "tempfile",
+        "description": "tempfile",
+        "detail": "tempfile",
+        "documentation": {}
+    },
+    {
         "label": "csv",
         "kind": 6,
         "isExtraImport": true,
@@ -918,29 +968,11 @@
         "documentation": {}
     },
     {
-        "label": "os",
-        "kind": 6,
-        "isExtraImport": true,
-        "importPath": "os",
-        "description": "os",
-        "detail": "os",
-        "documentation": {}
-    },
-    {
         "label": "datetime",
         "importPath": "datetime",
         "description": "datetime",
         "isExtraImport": true,
         "detail": "datetime",
-        "documentation": {}
-    },
-    {
-        "label": "tempfile",
-        "kind": 6,
-        "isExtraImport": true,
-        "importPath": "tempfile",
-        "description": "tempfile",
-        "detail": "tempfile",
         "documentation": {}
     },
     {
