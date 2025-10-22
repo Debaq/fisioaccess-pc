@@ -6,14 +6,14 @@ from PySide6.QtCore import Qt, QDate
 class SaveDialog(QDialog):
     """Diálogo para solicitar información antes de guardar un estudio"""
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, patient_data=None):
         super().__init__(parent)
         self.setWindowTitle("Guardar Estudio")
         self.setModal(True)
         self.setMinimumWidth(450)
         
         # Datos del formulario
-        self.patient_data = None
+        self.patient_data = patient_data
         
         self.setup_ui()
         

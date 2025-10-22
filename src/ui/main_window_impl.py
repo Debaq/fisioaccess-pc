@@ -66,6 +66,9 @@ class MainWindow(QMainWindow, Ui_Main):
         
         # Estado inicial de botones
         self.update_button_states()
+        
+        self.current_patient_data = None 
+
 
     def connect_signals(self):
         """Conectar todas las señales necesarias"""
@@ -646,6 +649,8 @@ class MainWindow(QMainWindow, Ui_Main):
             self.statusbar.showMessage("No se ingresaron datos del paciente")
             return
         
+        dialog = SaveDialog(self, self.current_patient_data)  # Pasar datos
+
         try:
             # 1. GENERAR ARCHIVO RAW
             self.statusbar.showMessage("Generando archivo de datos...")
@@ -809,7 +814,8 @@ class MainWindow(QMainWindow, Ui_Main):
             # Cargar grabaciones
             recordings = study_data.get('recordings', [])
             line_positions = study_data.get('line_positions', {})
-            
+            self.current_patient_data = study_data.get('patient', {})
+
             if not recordings:
                 self.statusbar.showMessage("El archivo no contiene grabaciones")
                 return
