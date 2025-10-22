@@ -308,6 +308,11 @@ class MainWindow(QMainWindow, Ui_Main):
         if not self.is_calibrated:
             self.statusbar.showMessage("Debe calibrar antes de iniciar una prueba")
             return
+        
+        # Verificar si ya alcanzó el máximo de grabaciones
+        if self.graph_handler.recording_count >= self.graph_handler.max_recordings:
+            self.statusbar.showMessage(f"Máximo de {self.graph_handler.max_recordings} grabaciones alcanzado")
+            return
             
         try:
             self.is_testing = True
@@ -315,15 +320,21 @@ class MainWindow(QMainWindow, Ui_Main):
             
             # ORDEN CORRECTO:
             # 1. Preparar el GraphHandler ANTES de enviar comando al hardware
-            self.graph_handler.prepare_new_recording()
+            success = self.graph_handler.prepare_new_recording()
             
-            # 2. Enviar comando al hardware
+            if not success:
+                self.statusbar.showMessage("No se puede iniciar nueva grabación")
+                self.is_testing = False
+                self.update_button_states()
+                return
+            
+            # 2. Enviar comando de reset al hardware
             if self.serial_handler:
                 if not hasattr(self.serial_handler, 'reader_thread') or self.serial_handler.reader_thread is None:
                     self.serial_handler.start_reading()
                 
                 self.serial_handler.write_data("v")
-                self.statusbar.showMessage("Comando de reset enviado, iniciando prueba...")
+                self.statusbar.showMessage(f"Iniciando prueba {self.graph_handler.recording_count + 1}... Espere la señal")
             
         except Exception as e:
             self.is_testing = False
