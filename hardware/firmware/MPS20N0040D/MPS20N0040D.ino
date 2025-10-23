@@ -17,14 +17,28 @@
 
 #include <math.h>
 
-// ========== PINES SENSOR ==========
-#define DOUT_PIN 5
-#define SCK_PIN  6
+// ========== PINES SENSOR1 ==========
+#define DOUT_PIN_1 5
+#define SCK_PIN_1  6
+
+// ========== PINES SENSOR2 ==========
+#define  DOUT_PIN_2 7
+#define SCK_PIN_2  4
+
+
+// ========== PINES LED interno ==========
+#define led_bulit 8
+
 
 // ========== PINES LED RGB (común VCC) ==========
 #define LED_R 9
 #define LED_G 3
 #define LED_B 10
+
+
+// ========== PINES LED RGB (común VCC) ==========
+#defina BUZZER 2
+
 
 // ========== CALIBRACIÓN EMPÍRICA ==========
 const float COUNTS_TO_KPA = 0.000028;
@@ -264,19 +278,19 @@ void fullReset() {
 long readHX710B() {
     long data = 0;
 
-    while (digitalRead(DOUT_PIN) == HIGH) yield();
+    while (digitalRead( DOUT_PIN_1) == HIGH) yield();
 
     for (uint8_t i = 0; i < 24; i++) {
-        digitalWrite(SCK_PIN, HIGH);
+        digitalWrite(SCK_PIN_1, HIGH);
         delayMicroseconds(1);
-        data = (data << 1) | digitalRead(DOUT_PIN);
-        digitalWrite(SCK_PIN, LOW);
+        data = (data << 1) | digitalRead( DOUT_PIN_1);
+        digitalWrite(SCK_PIN_1, LOW);
         delayMicroseconds(1);
     }
 
-    digitalWrite(SCK_PIN, HIGH);
+    digitalWrite(SCK_PIN_1, HIGH);
     delayMicroseconds(1);
-    digitalWrite(SCK_PIN, LOW);
+    digitalWrite(SCK_PIN_1, LOW);
 
     if (data & 0x00800000) data |= 0xFF000000;
 
@@ -285,13 +299,13 @@ long readHX710B() {
 
 // ========== INICIALIZAR HX710B ==========
 bool initHX710B() {
-    digitalWrite(SCK_PIN, HIGH);
+    digitalWrite(SCK_PIN_1, HIGH);
     delayMicroseconds(100);
-    digitalWrite(SCK_PIN, LOW);
+    digitalWrite(SCK_PIN_1, LOW);
     delay(100);
 
     int attempts = 0;
-    while (digitalRead(DOUT_PIN) == HIGH && attempts < 50) {
+    while (digitalRead( DOUT_PIN_1) == HIGH && attempts < 50) {
         delay(10);
         attempts++;
     }
@@ -390,9 +404,9 @@ void setup() {
     delay(50);
     Serial.begin(115200);
 
-    pinMode(SCK_PIN, OUTPUT);
-    pinMode(DOUT_PIN, INPUT);
-    digitalWrite(SCK_PIN, LOW);
+    pinMode(SCK_PIN_1, OUTPUT);
+    pinMode( DOUT_PIN_1, INPUT);
+    digitalWrite(SCK_PIN_1, LOW);
 
     setupLED();
     targetLEDState = LED_UNCALIBRATED; // Verde - esperando calibración

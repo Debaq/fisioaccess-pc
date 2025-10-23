@@ -637,7 +637,7 @@ class MainWindow(QMainWindow, Ui_Main):
             return
         
         # Abrir diálogo para solicitar datos
-        dialog = SaveDialog(self)
+        #dialog = SaveDialog(self)
         
         if dialog.exec() != SaveDialog.Accepted:
             return
