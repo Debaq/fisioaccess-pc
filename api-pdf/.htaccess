@@ -1,0 +1,15 @@
+# Deshabilitar listado de directorios
+Options -Indexes
+
+# Proteger la carpeta data (metadatos)
+RedirectMatch 403 ^.*/data/.*$
+
+# Si alguien pide directamente un .json de data también lo bloqueamos
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^data/ - [F,L]
+</IfModule>
+
+# Respuestas JSON en errores comunes (opcional pero útil)
+ErrorDocument 404 '{"error":"Not found"}'
+ErrorDocument 405 '{"error":"Method not allowed"}'

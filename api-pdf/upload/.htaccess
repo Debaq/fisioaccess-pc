@@ -1,0 +1,12 @@
+# No listar
+Options -Indexes
+
+# Desactivar la ejecución de PHP u otro código en caso de que alguien
+# logre subir un archivo con doble extensión
+php_flag engine off
+
+# Denegar cualquier tipo de ejecución
+<FilesMatch "\.(php|php3|php4|php5|phtml|pl|py|jsp|asp|sh|cgi)$">
+    Order deny,allow
+    Deny from all
+</FilesMatch>
