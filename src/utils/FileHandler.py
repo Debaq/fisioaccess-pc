@@ -180,7 +180,7 @@ class FileHandler(QObject):
                     "etnia": metadata.get('etnia', ''),
                     "estatura_cm": metadata.get('estatura_cm', 0),
                     "peso_kg": metadata.get('peso_kg', 0.0),
-                    "comentarios": metadata.get('comentarios', '')
+                    "comments": metadata.get('comments', '')
                 },
                 "analysis": {
                     "interpretacion": metadata.get('interpretacion', ''),
@@ -279,11 +279,25 @@ class FileHandler(QObject):
             with open(file_path, 'r') as file:
                 study_data = json.load(file)
             
+            # ========== MIGRACIÓN AUTOMÁTICA ==========
+            # Convertir "comentarios" → "comments" si existe versión antigua
+            if 'patient' in study_data and 'comentarios' in study_data['patient']:
+                study_data['patient']['comments'] = study_data['patient']['comentarios']
+                del study_data['patient']['comentarios']
+            
+            # Migrar también en analysis si existe
+            if 'analysis' in study_data:
+                if 'comentarios' in study_data['analysis']:
+                    study_data['analysis']['comments'] = study_data['analysis']['comentarios']
+                    del study_data['analysis']['comentarios']
+            # ==========================================
+            
             # Verificar formato
             required_fields = ['device', 'version', 'recordings']
             for field in required_fields:
                 if field not in study_data:
                     raise ValueError(f"Archivo inválido: falta campo '{field}'")
+            
             
             # Verificar que sea del dispositivo correcto
             if study_data['device'] != 'fisioaccess_espiro':

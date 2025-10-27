@@ -106,7 +106,7 @@ class SaveDialog(QDialog):
             "- Observaciones relevantes"
         )
         self.comments_edit.setMaximumHeight(60)
-        form_layout.addRow("Comentarios:", self.comments_edit)
+        form_layout.addRow("comments:", self.comments_edit)
         
         layout.addLayout(form_layout)
         
@@ -237,7 +237,7 @@ class SaveDialog(QDialog):
             'etnia': self.etnia_combo.currentText(),
             'estatura_cm': self.estatura_spin.value(),
             'peso_kg': self.peso_spin.value(),
-            'comentarios': self.comments_edit.toPlainText().strip(),
+            'comments': self.comments_edit.toPlainText().strip(),
             'interpretacion': interpretacion,
             'conclusion': conclusion,
             'dispositivo': 'fisioaccess_espiro'

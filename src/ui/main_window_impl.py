@@ -68,7 +68,11 @@ class MainWindow(QMainWindow, Ui_Main):
         self.update_button_states()
         
         self.current_patient_data = None 
-
+        
+        # ========== SINCRONIZACIÓN AUTOMÁTICA AL INICIO ==========
+        # Usar QTimer para ejecutar después de que la ventana esté completamente cargada
+        QTimer.singleShot(2000, self.auto_sync_offline_studies)  # 2 segundos de delay
+        # =========================================================
 
     def connect_signals(self):
         """Conectar todas las señales necesarias"""
@@ -638,7 +642,8 @@ class MainWindow(QMainWindow, Ui_Main):
         
         # Abrir diálogo para solicitar datos
         #dialog = SaveDialog(self)
-        
+        dialog = SaveDialog(self, self.current_patient_data)  # Pasar datos
+
         if dialog.exec() != SaveDialog.Accepted:
             return
         
@@ -649,7 +654,6 @@ class MainWindow(QMainWindow, Ui_Main):
             self.statusbar.showMessage("No se ingresaron datos del paciente")
             return
         
-        dialog = SaveDialog(self, self.current_patient_data)  # Pasar datos
 
         try:
             # 1. GENERAR ARCHIVO RAW
@@ -868,6 +872,39 @@ class MainWindow(QMainWindow, Ui_Main):
         except Exception as e:
             self.statusbar.showMessage(f"Error al cargar estudio: {str(e)}")
             print(f"Error en load_complete_study: {str(e)}")
+            
+    def auto_sync_offline_studies(self):
+        """Sincronizar automáticamente estudios offline al iniciar"""
+        try:
+            # Verificar si hay archivos offline
+            offline_folder = self.file_handler.get_offline_folder()
+            
+            if not os.path.exists(offline_folder):
+                return
+            
+            json_files = [f for f in os.listdir(offline_folder) if f.endswith('.json')]
+            
+            if not json_files:
+                return  # No hay archivos para sincronizar
+            
+            # Mostrar en statusbar
+            self.statusbar.showMessage(f"Sincronizando {len(json_files)} estudios offline...")
+            
+            # Ejecutar sincronización
+            stats = self.network_handler.sync_offline_studies(self.file_handler)
+            
+            # Mostrar resultado solo si hubo cambios
+            if stats['uploaded'] > 0 or stats['failed'] > 0:
+                message = f"Sincronización: {stats['uploaded']} subidos"
+                if stats['failed'] > 0:
+                    message += f", {stats['failed']} fallidos"
+                if stats['migrated'] > 0:
+                    message += f", {stats['migrated']} migrados"
+                
+                self.statusbar.showMessage(message, 5000)  # Mostrar por 5 segundos
+            
+        except Exception as e:
+            print(f"Error en sincronización automática: {str(e)}")
 
     @Slot()
     def clear_data(self):
