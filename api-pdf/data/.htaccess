@@ -1,0 +1,23 @@
+# .htaccess - Protección de carpeta data
+# Bloquea TODO acceso directo a archivos JSON y estructura
+
+# Denegar todo acceso
+Require all denied
+
+# Bloquear todo tipo de requests
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule .* - [F,L]
+</IfModule>
+
+# Deshabilitar listado
+Options -Indexes
+
+# Denegar acceso explícito a JSON
+<FilesMatch "\.(json)$">
+    Require all denied
+</FilesMatch>
+
+# Mensaje de error genérico
+ErrorDocument 403 "Acceso denegado"
+ErrorDocument 404 "Acceso denegado"

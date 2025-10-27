@@ -1,0 +1,28 @@
+# .htaccess - Módulo Profesor
+
+# Deshabilitar listado
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Forzar HTTPS (opcional)
+    # RewriteCond %{HTTPS} off
+    # RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+# Headers de seguridad
+<IfModule mod_headers.c>
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set X-Content-Type-Options "nosniff"
+</IfModule>
+
+# Bloquear acceso a archivos de configuración
+<FilesMatch "^config\.php$">
+    Require all denied
+</FilesMatch>
+
+# Límites de upload para materiales
+php_value upload_max_filesize 10M
+php_value post_max_size 12M

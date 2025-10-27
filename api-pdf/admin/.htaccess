@@ -1,0 +1,41 @@
+# .htaccess - Módulo Admin
+# Protección adicional para panel administrativo
+
+# Deshabilitar listado
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Forzar HTTPS (opcional, descomentar si tienes SSL)
+    # RewriteCond %{HTTPS} off
+    # RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+# Headers de seguridad reforzados
+<IfModule mod_headers.c>
+    Header set X-Frame-Options "DENY"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set X-Content-Type-Options "nosniff"
+    Header set Referrer-Policy "same-origin"
+    Header set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+</IfModule>
+
+# Bloquear acceso directo a config.php
+<FilesMatch "^config\.php$">
+    Require all denied
+</FilesMatch>
+
+# Límite de rate (requiere mod_ratelimit)
+<IfModule mod_ratelimit.c>
+    SetOutputFilter RATE_LIMIT
+    SetEnv rate-limit 400
+</IfModule>
+
+# Protección básica contra bots (opcional)
+<IfModule mod_rewrite.c>
+    RewriteCond %{HTTP_USER_AGENT} ^$ [OR]
+    RewriteCond %{HTTP_USER_AGENT} (libwww|wget|python|nikto|curl|scan|java|winhttp|clshttp|loader) [NC]
+    RewriteCond %{REQUEST_URI} !^/api/
+    RewriteRule .* - [F,L]
+</IfModule>

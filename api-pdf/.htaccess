@@ -1,15 +1,58 @@
+# .htaccess - Configuración principal
+# FisioaccessPC v2.0
+
 # Deshabilitar listado de directorios
 Options -Indexes
 
-# Proteger la carpeta data (metadatos)
-RedirectMatch 403 ^.*/data/.*$
-
-# Si alguien pide directamente un .json de data también lo bloqueamos
+# Habilitar reescritura de URLs
 <IfModule mod_rewrite.c>
     RewriteEngine On
+    RewriteBase /api-pdf/
+    
+    # Bloquear acceso directo a carpeta data
     RewriteRule ^data/ - [F,L]
+    
+    # Bloquear acceso a archivos sensibles
+    RewriteRule ^config\.php$ - [F,L]
 </IfModule>
 
-# Respuestas JSON en errores comunes (opcional pero útil)
-ErrorDocument 404 '{"error":"Not found"}'
-ErrorDocument 405 '{"error":"Method not allowed"}'
+# Proteger archivos de configuración
+<FilesMatch "^(config\.php|\.htaccess)$">
+    Require all denied
+</FilesMatch>
+
+# Permitir CORS solo para API
+<FilesMatch "^(api/)">
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type"
+</FilesMatch>
+
+# Establecer zona horaria
+SetEnv TZ America/Santiago
+
+# Límites de upload
+php_value upload_max_filesize 10M
+php_value post_max_size 12M
+php_value max_execution_time 300
+php_value max_input_time 300
+
+# Ocultar versión de PHP
+Header unset X-Powered-By
+php_flag expose_php off
+
+# Proteger contra XSS
+Header set X-XSS-Protection "1; mode=block"
+Header set X-Content-Type-Options "nosniff"
+Header set X-Frame-Options "SAMEORIGIN"
+
+# Páginas de error personalizadas
+ErrorDocument 403 /api-pdf/index.html
+ErrorDocument 404 /api-pdf/index.html
+
+# Deshabilitar ejecución de PHP en carpeta de uploads
+<Directory "data/uploads">
+    php_flag engine off
+    RemoveHandler .php .phtml .php3 .php4 .php5 .phps
+    RemoveType .php .phtml .php3 .php4 .php5 .phps
+</Directory>

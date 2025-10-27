@@ -1,12 +1,30 @@
-# No listar
+# .htaccess - Carpeta de uploads
+# Permite descargas pero NO ejecución de código
+
+# Deshabilitar listado de directorios
 Options -Indexes
 
-# Desactivar la ejecución de PHP u otro código en caso de que alguien
-# logre subir un archivo con doble extensión
+# Deshabilitar ejecución de PHP
 php_flag engine off
 
-# Denegar cualquier tipo de ejecución
+# Bloquear ejecución de scripts
 <FilesMatch "\.(php|php3|php4|php5|phtml|pl|py|jsp|asp|sh|cgi)$">
-    Order deny,allow
-    Deny from all
+    Require all denied
+</FilesMatch>
+
+# Permitir solo ciertos tipos de archivo
+<FilesMatch "\.(pdf|json|jpg|jpeg|png|gif|doc|docx|xls|xlsx)$">
+    Require all granted
+</FilesMatch>
+
+# Headers de seguridad para descargas
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set Content-Disposition "attachment"
+</IfModule>
+
+# No cachear archivos sensibles
+<FilesMatch "\.(json)$">
+    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header set Pragma "no-cache"
 </FilesMatch>
