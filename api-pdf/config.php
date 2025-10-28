@@ -11,6 +11,11 @@ define('BASE_PATH', __DIR__);
 define('DATA_PATH', BASE_PATH . '/data');
 define('UPLOADS_PATH', DATA_PATH . '/uploads');
 
+// ⬇️ AHORA SÍ cargar PHPMailer (DESPUÉS de BASE_PATH)
+require_once BASE_PATH . '/lib/PHPMailer/src/Exception.php';
+require_once BASE_PATH . '/lib/PHPMailer/src/PHPMailer.php';
+require_once BASE_PATH . '/lib/PHPMailer/src/SMTP.php';
+
 // Archivos de datos
 define('CONFIG_FILE', DATA_PATH . '/config.json');
 define('ADMINS_FILE', DATA_PATH . '/admins.json');
@@ -43,9 +48,10 @@ define('CODIGO_VERIFICACION_TIMEOUT', 1200);
 define('PDF_MAX_SIZE', 10 * 1024 * 1024); // 10MB
 define('RAW_MAX_SIZE', 5 * 1024 * 1024);  // 5MB
 
+
 // Configuración de email
-define('SMTP_HOST', 'mail.tmeduca.org');  // o smtp.tmeduca.org
-define('SMTP_PORT', 587);  // o 465 para SSL
+define('SMTP_HOST', 'mail.tmeduca.org');
+define('SMTP_PORT', 465);  // SSL
 define('SMTP_FROM', 'fisioaccess@tmeduca.org');
 define('SMTP_FROM_NAME', 'FisioaccessPC');
 define('SMTP_USER', 'fisioaccess@tmeduca.org');
@@ -158,18 +164,53 @@ function generarCodigoVerificacion() {
  * Enviar email simple (usando mail() de PHP)
  * Nota: Para producción se recomienda usar PHPMailer o similar
  */
+/**
+ * Enviar email usando PHPMailer
+ */
 function enviarEmail($destinatario, $asunto, $mensaje) {
-    $headers = [
-        'From: ' . SMTP_FROM_NAME . ' <' . SMTP_FROM . '>',
-        'Reply-To: ' . SMTP_FROM,
-        'X-Mailer: PHP/' . phpversion(),
-        'MIME-Version: 1.0',
-        'Content-Type: text/html; charset=UTF-8'
-    ];
-    
-    $headers_string = implode("\r\n", $headers);
-    
-    return mail($destinatario, $asunto, $mensaje, $headers_string);
+    // Si PHPMailer no está disponible, usar mail() básico
+    if (!class_exists('PHPMailer\PHPMailer\PHPMailer')) {
+        $headers = [
+            'From: ' . SMTP_FROM_NAME . ' <' . SMTP_FROM . '>',
+            'Reply-To: ' . SMTP_FROM,
+            'X-Mailer: PHP/' . phpversion(),
+            'MIME-Version: 1.0',
+            'Content-Type: text/html; charset=UTF-8'
+        ];
+
+        $headers_string = implode("\r\n", $headers);
+        return mail($destinatario, $asunto, $mensaje, $headers_string);
+    }
+
+    // Usar PHPMailer si está disponible
+    try {
+        $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+
+        // Configuración del servidor
+        $mail->isSMTP();
+        $mail->Host = SMTP_HOST;
+        $mail->SMTPAuth = true;
+        $mail->Username = SMTP_USER;
+        $mail->Password = SMTP_PASS;
+        $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS; // SSL
+        $mail->Port = SMTP_PORT;
+        $mail->CharSet = 'UTF-8';
+
+        // Remitente y destinatario
+        $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
+        $mail->addAddress($destinatario);
+
+        // Contenido
+        $mail->isHTML(true);
+        $mail->Subject = $asunto;
+        $mail->Body = $mensaje;
+
+        $mail->send();
+        return true;
+    } catch (Exception $e) {
+        error_log("Error enviando email: {$mail->ErrorInfo}");
+        return false;
+    }
 }
 
 /**
