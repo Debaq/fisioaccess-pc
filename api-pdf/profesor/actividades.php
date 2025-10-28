@@ -536,6 +536,22 @@ $config = cargarJSON(CONFIG_FILE);
     <div id="modalActividad" class="modal">
         <div class="modal-content">
             <h2 class="modal-header" id="modal-titulo">Nueva Actividad</h2>
+            
+            <!-- Leyenda versión de prueba -->
+            <div style="background: rgba(251, 191, 36, 0.2); border: 1px solid rgba(251, 191, 36, 0.5); padding: 10px; border-radius: 8px; margin-bottom: 20px; color: #fbbf24; font-size: 13px; text-align: center;">
+                ⚠️ <strong>Versión de Prueba</strong> - Asistente IA en desarrollo
+            </div>
+            
+            <!-- Botones de IA -->
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button type="button" class="btn btn-secondary" onclick="generarPromptIA()" style="flex: 1;">
+                    🤖 Generar Prompt IA
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="abrirModalPegarIA()" style="flex: 1;">
+                    📋 Pegar Respuesta IA
+                </button>
+            </div>
+            
             <form method="POST" id="formActividad">
                 <input type="hidden" name="action" id="form-action" value="crear">
                 <input type="hidden" name="id" id="form-id">
@@ -686,7 +702,195 @@ $config = cargarJSON(CONFIG_FILE);
         </div>
     </div>
     
+    <!-- Modal para pegar respuesta IA -->
+    <div id="modalPegarIA" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <h2 class="modal-header">📋 Pegar Respuesta del LLM</h2>
+            <p style="color: white; margin-bottom: 15px; opacity: 0.9;">
+                Pega aquí la respuesta completa que te dio tu LLM (Claude, ChatGPT, etc.)
+            </p>
+            <textarea id="textarea-respuesta-ia" 
+                      style="width: 100%; min-height: 300px; padding: 12px; border-radius: 8px; 
+                             background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.3);
+                             font-family: monospace; font-size: 13px;"
+                      placeholder='Pega aquí todo el texto que te dio el LLM, incluyendo:
+```json
+{
+  "nombre": "...",
+  "descripcion": "...",
+  ...
+}
+```'></textarea>
+            <div id="error-parse" style="color: #ef4444; margin-top: 10px; display: none;"></div>
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button type="button" class="btn btn-primary" onclick="procesarRespuestaIA()" style="flex: 1;">
+                    Llenar Formulario
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="cerrarModalIA()" style="flex: 1;">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+    
     <script>
+        // ============================================
+        // FUNCIONES DEL ASISTENTE IA
+        // ============================================
+        
+        function generarPromptIA() {
+            const form = document.getElementById('formActividad');
+            const formData = new FormData(form);
+            
+            // Recopilar campos llenos y vacíos
+            const camposLlenos = {};
+            const camposVacios = [];
+            
+            const campos = {
+                'nombre': 'Nombre de la Actividad',
+                'tipo_estudio': 'Tipo de Estudio',
+                'tipo_sesion': 'Tipo de Sesión',
+                'descripcion': 'Descripción',
+                'fecha_inicio': 'Fecha de Inicio',
+                'fecha_cierre': 'Fecha de Cierre',
+                'objetivos': 'Objetivos de Aprendizaje',
+                'protocolo': 'Protocolo/Instrucciones',
+                'criterios_analisis': 'Criterios de Análisis',
+                'ponderacion': 'Ponderación (%)',
+                'escala': 'Escala de Calificación'
+            };
+            
+            for (const [key, label] of Object.entries(campos)) {
+                const valor = formData.get(key);
+                if (valor && valor.trim() !== '') {
+                    camposLlenos[label] = valor;
+                } else {
+                    camposVacios.push(label);
+                }
+            }
+            
+            // Generar el prompt
+            let prompt = `Soy profesor de fisiología y necesito ayuda para completar la información de una actividad práctica de laboratorio.
+
+CONTEXTO - Campos ya completados:
+${Object.entries(camposLlenos).map(([k, v]) => `- ${k}: ${v}`).join('\n')}
+
+NECESITO QUE COMPLETES ESTOS CAMPOS:
+${camposVacios.map(c => `- ${c}`).join('\n')}
+
+INSTRUCCIONES IMPORTANTES:
+1. Responde SOLO con un objeto JSON
+2. NO agregues texto explicativo antes o después
+3. Puedes envolver el JSON en \`\`\`json ... \`\`\` si quieres
+4. Genera contenido apropiado para una actividad universitaria de fisiología
+5. Los objetivos deben ser una lista separada por saltos de línea
+6. El protocolo debe tener pasos numerados
+
+FORMATO DE RESPUESTA REQUERIDO:
+\`\`\`json
+{
+  "nombre": "Nombre descriptivo de la actividad",
+  "tipo_estudio": "espirometria|ecg|emg|eeg",
+  "tipo_sesion": "real|simulado_con_equipo|simulado_sin_equipo",
+  "descripcion": "Descripción detallada de 2-3 oraciones",
+  "objetivos": "Objetivo 1\\nObjetivo 2\\nObjetivo 3",
+  "protocolo": "1. Paso uno\\n2. Paso dos\\n3. Paso tres",
+  "criterios_analisis": "Criterios para analizar los resultados",
+  "ponderacion": 15.0,
+  "escala": "1.0-7.0"
+}
+\`\`\`
+
+Por favor genera el JSON completo ahora:`;
+
+            // Copiar al portapapeles
+            navigator.clipboard.writeText(prompt).then(() => {
+                alert('✅ Prompt copiado al portapapeles!\n\n1. Pégalo en tu LLM favorito (Claude, ChatGPT, etc.)\n2. Copia la respuesta completa\n3. Usa el botón "Pegar Respuesta IA"');
+            }).catch(() => {
+                // Fallback: mostrar en un textarea
+                const textarea = document.createElement('textarea');
+                textarea.value = prompt;
+                textarea.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:80%;height:80%;z-index:10000;padding:20px;background:white;color:black;border:2px solid #333;';
+                document.body.appendChild(textarea);
+                textarea.select();
+                alert('Copia este prompt manualmente (Ctrl+C) y cierra esta ventana');
+                textarea.addEventListener('blur', () => textarea.remove());
+            });
+        }
+        
+        function abrirModalPegarIA() {
+            document.getElementById('modalPegarIA').style.display = 'block';
+            document.getElementById('textarea-respuesta-ia').value = '';
+            document.getElementById('error-parse').style.display = 'none';
+        }
+        
+        function cerrarModalIA() {
+            document.getElementById('modalPegarIA').style.display = 'none';
+        }
+        
+        function extractJSON(text) {
+            // 1. Buscar bloques de código markdown con ```json
+            let match = text.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+            if (match) return match[1];
+            
+            // 2. Buscar bloques de código markdown sin especificar lenguaje
+            match = text.match(/```\s*(\{[\s\S]*?\})\s*```/);
+            if (match) return match[1];
+            
+            // 3. Buscar JSON puro (primeras llaves hasta las últimas)
+            match = text.match(/\{[\s\S]*\}/);
+            if (match) return match[0];
+            
+            return null;
+        }
+        
+        function procesarRespuestaIA() {
+            const textarea = document.getElementById('textarea-respuesta-ia');
+            const errorDiv = document.getElementById('error-parse');
+            const input = textarea.value.trim();
+            
+            if (!input) {
+                errorDiv.textContent = 'Por favor pega la respuesta del LLM';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            try {
+                // Extraer JSON
+                const jsonStr = extractJSON(input);
+                if (!jsonStr) {
+                    throw new Error('No se encontró ningún JSON válido en el texto');
+                }
+                
+                // Parsear JSON
+                const data = JSON.parse(jsonStr);
+                
+                // Llenar formulario
+                if (data.nombre) document.getElementById('form-nombre').value = data.nombre;
+                if (data.tipo_estudio) document.getElementById('form-tipo').value = data.tipo_estudio;
+                if (data.tipo_sesion) document.getElementById('form-sesion').value = data.tipo_sesion;
+                if (data.descripcion) document.getElementById('form-descripcion').value = data.descripcion;
+                if (data.objetivos) document.getElementById('form-objetivos').value = data.objetivos;
+                if (data.protocolo) document.getElementById('form-protocolo').value = data.protocolo;
+                if (data.criterios_analisis) document.getElementById('form-criterios').value = data.criterios_analisis;
+                if (data.ponderacion !== undefined) document.getElementById('form-ponderacion').value = data.ponderacion;
+                if (data.escala) document.getElementById('form-escala').value = data.escala;
+                
+                // Cerrar modal y mostrar éxito
+                cerrarModalIA();
+                alert('✅ Formulario completado exitosamente!\n\nRevisa los campos y ajusta si es necesario.');
+                
+            } catch (error) {
+                errorDiv.textContent = '❌ Error: ' + error.message + '\n\nAsegúrate de copiar la respuesta completa del LLM, incluyendo el JSON.';
+                errorDiv.style.display = 'block';
+                console.error('Error al parsear:', error);
+            }
+        }
+        
+        // ============================================
+        // FUNCIONES ORIGINALES DEL FORMULARIO
+        // ============================================
+        
         function abrirModal() {
             document.getElementById('modal-titulo').textContent = 'Nueva Actividad';
             document.getElementById('form-action').value = 'crear';
