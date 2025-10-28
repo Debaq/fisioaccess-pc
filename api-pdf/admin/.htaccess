@@ -21,10 +21,7 @@ Options -Indexes
     Header set Permissions-Policy "geolocation=(), microphone=(), camera=()"
 </IfModule>
 
-# Bloquear acceso directo a config.php
-<FilesMatch "^config\.php$">
-    Require all denied
-</FilesMatch>
+
 
 # Límite de rate (requiere mod_ratelimit)
 <IfModule mod_ratelimit.c>

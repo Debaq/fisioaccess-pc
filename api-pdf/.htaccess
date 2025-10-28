@@ -11,15 +11,10 @@ Options -Indexes
     
     # Bloquear acceso directo a carpeta data
     RewriteRule ^data/ - [F,L]
-    
-    # Bloquear acceso a archivos sensibles
-    RewriteRule ^config\.php$ - [F,L]
+
 </IfModule>
 
-# Proteger archivos de configuración
-<FilesMatch "^(config\.php|\.htaccess)$">
-    Require all denied
-</FilesMatch>
+
 
 # Permitir CORS solo para API
 <FilesMatch "^(api/)">

@@ -428,13 +428,13 @@ $actividad = $actividades[$actividad_id];
                         <div class="material-info">
                             <div class="material-titulo">
                                 <?php
-                                $icono = match($mat['tipo']) {
-                                    'pdf' => '📄',
-                                    'video' => '🎥',
-                                    'imagen' => '🖼️',
-                                    'link' => '🔗',
-                                    default => '📎'
-                                };
+                                $icono = '📎'; // default
+                                switch($mat['tipo']) {
+                                    case 'pdf': $icono = '📄'; break;
+                                    case 'video': $icono = '🎥'; break;
+                                    case 'imagen': $icono = '🖼️'; break;
+                                    case 'link': $icono = '🔗'; break;
+                                }
                                 echo $icono;
                                 ?> <?= htmlspecialchars($mat['titulo']) ?>
                             </div>
