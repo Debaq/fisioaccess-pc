@@ -1,6 +1,7 @@
 <?php
 /**
  * estudiante/generar_token.php - Genera token de acceso para software desktop
+ * Token específico por actividad-estudiante
  */
 
 require_once '../config.php';
@@ -27,6 +28,34 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 try {
     $rut = $_SESSION['rut'];
+    $actividad_id = $_POST['actividad_id'] ?? null;
+
+    if (!$actividad_id) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'ID de actividad requerido'
+        ]);
+        exit;
+    }
+
+    // Verificar que el estudiante esté inscrito en la actividad
+    $actividades = cargarJSON(ACTIVIDADES_FILE);
+
+    if (!isset($actividades[$actividad_id])) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Actividad no encontrada'
+        ]);
+        exit;
+    }
+
+    if (!in_array($rut, $actividades[$actividad_id]['estudiantes_inscritos'] ?? [])) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'No estás inscrito en esta actividad'
+        ]);
+        exit;
+    }
 
     // Generar token simple de 6 caracteres alfanuméricos
     $caracteres = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -39,15 +68,19 @@ try {
     $tokens_file = DATA_PATH . '/tokens.json';
     $tokens = file_exists($tokens_file) ? json_decode(file_get_contents($tokens_file), true) : [];
 
-    // Revocar tokens anteriores del mismo estudiante (opcional)
-    $tokens = array_filter($tokens, fn($t) => $t['rut'] !== $rut);
+    // Revocar tokens anteriores de este estudiante para esta actividad específica
+    $tokens = array_filter($tokens, function($t) use ($rut, $actividad_id) {
+        return !($t['rut'] === $rut && $t['actividad_id'] === $actividad_id);
+    });
 
     // Guardar nuevo token
     $tokens[$token] = [
+        'token' => $token,
         'rut' => $rut,
+        'actividad_id' => $actividad_id,
         'rol' => 'estudiante',
         'creado' => formatearFecha(),
-        'expira' => date('Y-m-d H:i:s', strtotime('+1 year')), // Token válido por 1 año
+        'expira' => date('Y-m-d H:i:s', strtotime('+1 year')),
         'ultimo_uso' => null
     ];
 
@@ -56,6 +89,8 @@ try {
     echo json_encode([
         'success' => true,
         'token' => $token,
+        'actividad_id' => $actividad_id,
+        'actividad_nombre' => $actividades[$actividad_id]['info_basica']['nombre'],
         'expira' => $tokens[$token]['expira']
     ]);
 

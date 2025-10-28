@@ -341,6 +341,80 @@ body {
     opacity: 0.8;
     font-size: 14px;
 }
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal.show {
+    display: flex;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 20px;
+    padding: 40px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+    font-size: 24px;
+    font-weight: 700;
+    color: #7c3aed;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.token-box {
+    background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+    color: white;
+    padding: 30px;
+    border-radius: 12px;
+    text-align: center;
+    margin: 20px 0;
+}
+
+.token-label {
+    font-size: 14px;
+    opacity: 0.9;
+    margin-bottom: 10px;
+}
+
+.token-value {
+    font-size: 48px;
+    font-weight: 700;
+    letter-spacing: 8px;
+    font-family: monospace;
+}
+
+.token-info {
+    background: #f3f4f6;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 15px 0;
+    font-size: 14px;
+    color: #374151;
+}
+
+.token-info strong {
+    color: #7c3aed;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
 </style>
 </head>
 <body>
@@ -381,22 +455,8 @@ body {
 </div>
 
 <!-- Token para Desktop -->
-<div class="section">
-<div class="section-title">🔑 Token de Acceso Desktop</div>
-<div class="token-section">
-<div class="token-title">Token para Software de Escritorio</div>
-<div class="token-description">
-Genera un token de autenticación para usar en el software FisioaccessPC de escritorio.
-Este token es personal e intransferible.
-</div>
-<div id="tokenDisplay" class="token-display"></div>
-<div style="display: flex; gap: 10px;">
-<button onclick="generarToken()" class="btn btn-primary">Generar Token</button>
-<button onclick="copiarToken()" class="btn btn-secondary" id="copiarBtn" style="display: none;">
-Copiar Token
-</button>
-</div>
-</div>
+<div class="section" style="display: none;">
+<!-- Removido - ahora cada actividad genera su propio token -->
 </div>
 
 <!-- Mis Estudios -->
@@ -431,10 +491,10 @@ $revisada = $tiene_entrega && $entrega['revision']['estado'] === 'revisada';
 <div class="estudio-header">
 <div>
 <div class="estudio-nombre">
-<?= htmlspecialchars($estudio['info_basica']['nombre']) ?>
+<?= htmlspecialchars($estudio['info_basica']['nombre'] ?? 'Sin nombre') ?>
 </div>
 <span class="estudio-tipo">
-<?= htmlspecialchars($estudio['info_basica']['tipo']) ?>
+<?= htmlspecialchars($estudio['info_basica']['tipo_estudio'] ?? 'No especificado') ?>
 </span>
 </div>
 <div>
@@ -451,16 +511,24 @@ $revisada = $tiene_entrega && $entrega['revision']['estado'] === 'revisada';
 </div>
 
 <div class="estudio-descripcion">
-<?= nl2br(htmlspecialchars($estudio['info_basica']['descripcion'])) ?>
+<?= nl2br(htmlspecialchars($estudio['info_basica']['descripcion'] ?? '')) ?>
 </div>
 
 <div class="estudio-info">
-<span>📅 Creado: <?= date('d/m/Y', strtotime($estudio['metadata']['fecha_creacion'])) ?></span>
-<span>👨‍🏫 ID Profesor: <?= substr($estudio['profesor_rut'], 0, 8) ?>...</span>
+<span>📅 Creado: <?= isset($estudio['metadata']['fecha_creacion']) ? date('d/m/Y', strtotime($estudio['metadata']['fecha_creacion'])) : 'N/A' ?></span>
+<?php
+// Buscar nombre del profesor
+$profesores = cargarJSON(PROFESORES_FILE);
+$nombre_profesor = 'Desconocido';
+if (isset($estudio['profesor_rut']) && isset($profesores[$estudio['profesor_rut']])) {
+    $nombre_profesor = $profesores[$estudio['profesor_rut']]['nombre'];
+}
+?>
+<span>👨‍🏫 Profesor: <?= htmlspecialchars($nombre_profesor) ?></span>
 </div>
 
 <div class="estudio-actions">
-<?php if ($estudio['archivos']['pdf_path']): ?>
+<?php if (isset($estudio['archivos']['pdf_path']) && $estudio['archivos']['pdf_path']): ?>
 <a href="../<?= htmlspecialchars($estudio['archivos']['pdf_path']) ?>"
 download
 class="btn btn-primary btn-small">
@@ -468,7 +536,7 @@ class="btn btn-primary btn-small">
 </a>
 <?php endif; ?>
 
-<?php if ($estudio['archivos']['material_complementario']): ?>
+<?php if (isset($estudio['archivos']['material_complementario']) && $estudio['archivos']['material_complementario']): ?>
 <a href="../<?= htmlspecialchars($estudio['archivos']['material_complementario']) ?>"
 download
 class="btn btn-secondary btn-small">
@@ -487,6 +555,60 @@ class="btn btn-secondary btn-small">
 💬 Ver Retroalimentación
 </button>
 <?php endif; ?>
+
+<button onclick="verDetalles('<?= $estudio['id'] ?>')"
+class="btn btn-secondary btn-small">
+📋 Ver Detalles
+</button>
+</div>
+
+<!-- Token Desktop inline -->
+<?php
+// Buscar token activo para esta actividad
+$tokens_file = DATA_PATH . '/tokens.json';
+$tokens = file_exists($tokens_file) ? json_decode(file_get_contents($tokens_file), true) : [];
+$token_activo = null;
+
+foreach ($tokens as $token => $data) {
+    if ($data['rut'] === $rut && $data['actividad_id'] === $estudio['id']) {
+        // Verificar si no ha expirado
+        if (strtotime($data['expira']) > time()) {
+            $token_activo = $data;
+            break;
+        }
+    }
+}
+?>
+
+<div style="margin-top: 15px; padding: 15px; background: rgba(124, 58, 237, 0.1); border-radius: 8px; border: 1px solid rgba(124, 58, 237, 0.3);">
+<div style="display: flex; justify-content: space-between; align-items: center;">
+<div>
+<strong style="font-size: 13px;">🔑 Token Desktop:</strong>
+<?php if ($token_activo): ?>
+<span style="font-family: monospace; font-size: 18px; font-weight: 700; letter-spacing: 3px; margin-left: 10px;">
+<?= htmlspecialchars($token_activo['token']) ?>
+</span>
+<div style="font-size: 11px; opacity: 0.8; margin-top: 5px;">
+Expira: <?= date('d/m/Y H:i', strtotime($token_activo['expira'])) ?>
+</div>
+<?php else: ?>
+<span style="opacity: 0.7; font-size: 13px; margin-left: 10px;">No generado</span>
+<?php endif; ?>
+</div>
+<div style="display: flex; gap: 5px;">
+<?php if ($token_activo): ?>
+<button onclick="copiarToken('<?= $token_activo['token'] ?>')"
+class="btn btn-secondary btn-small">
+📋 Copiar
+</button>
+<?php endif; ?>
+<button onclick="generarTokenActividad('<?= $estudio['id'] ?>')"
+class="btn btn-primary btn-small"
+<?= $token_activo ? 'disabled title="Ya tienes un token activo"' : '' ?>>
+<?= $token_activo ? '✓ Generado' : '🔑 Generar' ?>
+</button>
+</div>
+</div>
 </div>
 </div>
 <?php endforeach; ?>
@@ -496,43 +618,43 @@ class="btn btn-secondary btn-small">
 </div>
 
 <script>
-let tokenActual = '';
+function copiarToken(token) {
+    navigator.clipboard.writeText(token).then(() => {
+        const btn = event.target;
+        const original = btn.textContent;
+        btn.textContent = '✓ Copiado';
+    setTimeout(() => btn.textContent = original, 2000);
+    });
+}
 
-async function generarToken() {
+async function generarTokenActividad(actividadId) {
     try {
+        const formData = new FormData();
+        formData.append('actividad_id', actividadId);
+
         const response = await fetch('generar_token.php', {
-            method: 'POST'
+            method: 'POST',
+            body: formData
         });
 
         const data = await response.json();
 
         if (data.success) {
-            tokenActual = data.token;
-            document.getElementById('tokenDisplay').textContent = tokenActual;
-            document.getElementById('tokenDisplay').classList.add('show');
-            document.getElementById('copiarBtn').style.display = 'inline-block';
+            // Recargar página para mostrar el token
+            location.reload();
         } else {
-            alert('Error al generar token: ' + data.message);
+            alert('Error: ' + data.message);
         }
     } catch (error) {
         alert('Error al generar token');
-        console.error(error);
     }
 }
 
-function copiarToken() {
-    navigator.clipboard.writeText(tokenActual).then(() => {
-        const btn = document.getElementById('copiarBtn');
-        const textoOriginal = btn.textContent;
-        btn.textContent = '✓ Copiado!';
-    setTimeout(() => {
-        btn.textContent = textoOriginal;
-    }, 2000);
-    });
+function verDetalles(actividadId) {
+    window.location.href = 'actividad_detalle.php?id=' + actividadId;
 }
 
 function verRetroalimentacion(actividadId) {
-    // Abrir modal o ventana con retroalimentación
     window.location.href = 'retroalimentacion.php?actividad=' + actividadId;
 }
 </script>

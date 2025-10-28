@@ -114,11 +114,27 @@ try {
             'email' => $email,
             'activo' => true,
             'created' => formatearFecha(),
-            'actividades' => []
+            'actividades' => [$actividad_id]
         ];
 
         $estudiantes[$rut_estudiante] = $estudiante;
         guardarJSON(ESTUDIANTES_FILE, $estudiantes);
+    } else {
+        // Si ya existe, agregar la actividad si no está
+        if (!in_array($actividad_id, $estudiante['actividades'] ?? [])) {
+            $estudiantes[$rut_estudiante]['actividades'][] = $actividad_id;
+            guardarJSON(ESTUDIANTES_FILE, $estudiantes);
+        }
+    }
+
+    // INSCRIBIR AL ESTUDIANTE EN LA ACTIVIDAD
+    $actividades = cargarJSON(ACTIVIDADES_FILE);
+    if (!in_array($rut_estudiante, $actividades[$actividad_id]['estudiantes_inscritos'] ?? [])) {
+        if (!isset($actividades[$actividad_id]['estudiantes_inscritos'])) {
+            $actividades[$actividad_id]['estudiantes_inscritos'] = [];
+        }
+        $actividades[$actividad_id]['estudiantes_inscritos'][] = $rut_estudiante;
+        guardarJSON(ACTIVIDADES_FILE, $actividades);
     }
 
     // CREAR SESIÓN PHP AUTOMÁTICA
