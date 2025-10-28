@@ -229,6 +229,13 @@ function handleLogout() {
     session_start();
     session_destroy();
 
+    // Si es GET (desde navegador), redirigir al index
+    if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        header('Location: ../index.html');
+        exit;
+    }
+
+    // Si es POST (desde API), responder JSON
     responderJSON([
         'success' => true,
         'message' => 'Sesión cerrada exitosamente'
