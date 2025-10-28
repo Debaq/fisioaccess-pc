@@ -44,10 +44,12 @@ define('PDF_MAX_SIZE', 10 * 1024 * 1024); // 10MB
 define('RAW_MAX_SIZE', 5 * 1024 * 1024);  // 5MB
 
 // Configuración de email
-define('SMTP_HOST', 'localhost'); // Cambiar según tu configuración
-define('SMTP_PORT', 25);
-define('SMTP_FROM', 'noreply@tmeduca.org');
+define('SMTP_HOST', 'mail.tmeduca.org');  // o smtp.tmeduca.org
+define('SMTP_PORT', 587);  // o 465 para SSL
+define('SMTP_FROM', 'fisioaccess@tmeduca.org');
 define('SMTP_FROM_NAME', 'FisioaccessPC');
+define('SMTP_USER', 'fisioaccess@tmeduca.org');
+define('SMTP_PASS', '@WYeLs[)hh.?W;Ej');
 
 // Tipos de estudio
 define('TIPOS_ESTUDIO', [
