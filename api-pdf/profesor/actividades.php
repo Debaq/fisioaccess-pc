@@ -78,9 +78,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'entregas_pendientes' => 0,
                     'entregas_revisadas' => 0,
                     'promedio_nota' => 0
-                ]
+                ],
+                'accesos' => [
+                'token_actividad' => generarToken(12),
+                'url_base' => 'https://tmeduca.org/fisioaccess', // ⬇️ ACA TMEDUCA ⬇️
+                'link_directo' => '',
+                'html_embed' => '',
+                'modo_registro' => isset($_POST['modo_registro']) ? $_POST['modo_registro'] : 'cerrado',
+                'dominio_email' => trim($_POST['dominio_email'] ?? '@uach.cl'),
+                'estudiantes_registrados' => [],
+                'fecha_generacion' => formatearFecha()
+            ]
             ];
             
+            guardarJSON(ACTIVIDADES_FILE, $actividades);
+            // ⬇️ AGREGAR ESTAS LÍNEAS ⬇️
+            // Generar accesos automáticamente
+            $token = $actividades[$id]['accesos']['token_actividad'];
+            $url_base = $actividades[$id]['accesos']['url_base'];
+            $actividades[$id]['accesos']['link_directo'] = $url_base . '/estudiante/acceso.php?token=' . $token;
+
+            // Generar HTML embebido
+            $html_embed = generarHTMLEmbebido($actividades[$id]);
+            $actividades[$id]['accesos']['html_embed'] = $html_embed;
+
+            // Guardar nuevamente con los accesos generados
             guardarJSON(ACTIVIDADES_FILE, $actividades);
             
             // Actualizar cuota del profesor
@@ -150,6 +172,38 @@ $mis_actividades = array_filter($todas_actividades, fn($a) => $a['profesor_rut']
 $profesores = cargarJSON(PROFESORES_FILE);
 $profesor = $profesores[$rut];
 $config = cargarJSON(CONFIG_FILE);
+
+
+
+/**
+ * Generar HTML embebido para Moodle
+ */
+function generarHTMLEmbebido($actividad) {
+    $nombre = htmlspecialchars($actividad['info_basica']['nombre']);
+    $descripcion = htmlspecialchars(substr($actividad['info_basica']['descripcion'], 0, 200));
+    $fecha_cierre = date('d/m/Y H:i', strtotime($actividad['info_basica']['fecha_cierre']));
+    $link = $actividad['accesos']['link_directo'];
+    $tipo = TIPOS_ESTUDIO[$actividad['info_basica']['tipo_estudio']];
+    
+    $html = '<div style="border:2px solid #7c3aed; border-radius:12px; padding:25px; max-width:700px; background:linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', sans-serif;">
+  <h2 style="color:#5b21b6; margin:0 0 15px 0; font-size:24px;">📝 ' . $nombre . '</h2>
+  <div style="background:white; padding:15px; border-radius:8px; margin-bottom:15px;">
+    <p style="margin:0 0 10px 0; color:#4b5563;"><strong style="color:#7c3aed;">📊 Tipo:</strong> ' . $tipo . '</p>
+    <p style="margin:0 0 10px 0; color:#4b5563;"><strong style="color:#7c3aed;">📅 Fecha límite:</strong> ' . $fecha_cierre . '</p>
+    <p style="margin:0; color:#4b5563;"><strong style="color:#7c3aed;">📄 Descripción:</strong><br>' . $descripcion . '...</p>
+  </div>
+  <a href="' . $link . '" 
+     style="display:inline-block; background:#7c3aed; color:white; 
+            padding:14px 28px; text-decoration:none; border-radius:8px; 
+            font-weight:600; font-size:16px; transition: all 0.3s;">
+    🎯 Comenzar Actividad
+  </a>
+</div>';
+    
+    return $html;
+}
+
+
 ?>
 <!DOCTYPE html>
 <html lang="es">

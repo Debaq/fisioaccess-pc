@@ -20,6 +20,11 @@ define('ACTIVIDADES_FILE', DATA_PATH . '/actividades.json');
 define('ENTREGAS_FILE', DATA_PATH . '/entregas.json');
 define('RESERVAS_FILE', DATA_PATH . '/reservas_ids.json');
 
+// Nuevos archivos para accesos estudiantes
+define('SESIONES_ESTUDIANTES_FILE', DATA_PATH . '/sesiones_estudiantes.json');
+define('TOKENS_APP_FILE', DATA_PATH . '/tokens_app.json');
+define('CODIGOS_VERIFICACION_FILE', DATA_PATH . '/codigos_verificacion.json');
+
 // Configuración de sesiones
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
@@ -28,9 +33,21 @@ ini_set('session.cookie_secure', 0); // Cambiar a 1 si usas HTTPS
 // Timeout de sesión (2 horas)
 define('SESSION_TIMEOUT', 7200);
 
+// Timeout de token de app (4 horas)
+define('TOKEN_APP_TIMEOUT', 14400);
+
+// Timeout de código de verificación (20 minutos)
+define('CODIGO_VERIFICACION_TIMEOUT', 1200);
+
 // Límites de archivos
 define('PDF_MAX_SIZE', 10 * 1024 * 1024); // 10MB
 define('RAW_MAX_SIZE', 5 * 1024 * 1024);  // 5MB
+
+// Configuración de email
+define('SMTP_HOST', 'localhost'); // Cambiar según tu configuración
+define('SMTP_PORT', 25);
+define('SMTP_FROM', 'noreply@tmeduca.org');
+define('SMTP_FROM_NAME', 'FisioaccessPC');
 
 // Tipos de estudio
 define('TIPOS_ESTUDIO', [
@@ -106,5 +123,110 @@ function formatearFecha($timestamp = null) {
         $timestamp = time();
     }
     return date('c', is_numeric($timestamp) ? $timestamp : strtotime($timestamp));
+}
+
+/**
+ * Generar token aleatorio para actividad o app
+ */
+function generarToken($longitud = 16) {
+    $caracteres = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    $token = '';
+    $max = strlen($caracteres) - 1;
+    
+    for ($i = 0; $i < $longitud; $i++) {
+        $token .= $caracteres[random_int(0, $max)];
+    }
+    
+    // Formatear con guiones para legibilidad (ej: ABCD-1234-WXYZ)
+    if ($longitud >= 12) {
+        $token = substr($token, 0, 4) . '-' . substr($token, 4, 4) . '-' . substr($token, 8);
+    }
+    
+    return $token;
+}
+
+/**
+ * Generar código numérico de verificación
+ */
+function generarCodigoVerificacion() {
+    return str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+}
+
+/**
+ * Enviar email simple (usando mail() de PHP)
+ * Nota: Para producción se recomienda usar PHPMailer o similar
+ */
+function enviarEmail($destinatario, $asunto, $mensaje) {
+    $headers = [
+        'From: ' . SMTP_FROM_NAME . ' <' . SMTP_FROM . '>',
+        'Reply-To: ' . SMTP_FROM,
+        'X-Mailer: PHP/' . phpversion(),
+        'MIME-Version: 1.0',
+        'Content-Type: text/html; charset=UTF-8'
+    ];
+    
+    $headers_string = implode("\r\n", $headers);
+    
+    return mail($destinatario, $asunto, $mensaje, $headers_string);
+}
+
+/**
+ * Validar formato de email institucional
+ */
+function validarEmailInstitucional($email, $dominio_requerido = null) {
+    // Validar formato básico
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return false;
+    }
+    
+    // Si se especifica dominio, validar
+    if ($dominio_requerido) {
+        $dominio = substr(strrchr($email, "@"), 1);
+        return strtolower($dominio) === strtolower($dominio_requerido);
+    }
+    
+    return true;
+}
+
+/**
+ * Limpiar códigos de verificación expirados
+ */
+function limpiarCodigosExpirados() {
+    $codigos = cargarJSON(CODIGOS_VERIFICACION_FILE);
+    $tiempo_actual = time();
+    $codigos_validos = [];
+    
+    foreach ($codigos as $email => $data) {
+        if ($tiempo_actual - $data['timestamp'] < CODIGO_VERIFICACION_TIMEOUT) {
+            $codigos_validos[$email] = $data;
+        }
+    }
+    
+    if (count($codigos_validos) !== count($codigos)) {
+        guardarJSON(CODIGOS_VERIFICACION_FILE, $codigos_validos);
+    }
+    
+    return $codigos_validos;
+}
+
+/**
+ * Limpiar tokens de app expirados
+ */
+function limpiarTokensExpirados() {
+    $tokens = cargarJSON(TOKENS_APP_FILE);
+    $tiempo_actual = time();
+    $tokens_validos = [];
+    
+    foreach ($tokens as $token => $data) {
+        if ($tiempo_actual - $data['timestamp'] < TOKEN_APP_TIMEOUT) {
+            $tokens_validos[$token] = $data;
+        }
+    }
+    
+    if (count($tokens_validos) !== count($tokens)) {
+        guardarJSON(TOKENS_APP_FILE, $tokens_validos);
+    }
+    
+    return $tokens_validos;
 }
 ?>
