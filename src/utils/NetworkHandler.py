@@ -12,8 +12,9 @@ class NetworkHandler(QObject):
     
     def __init__(self):
         super().__init__()
-        self.api_url = "https://tmeduca.org/api-pdf/index.php"
+        self.api_url = "https://tmeduca.org/fisioaccess/api/entregas.php"
         self.timeout = 5  # segundos
+        self.student_token = None  # Token del estudiante autenticado
         
     def check_connectivity(self):
         """
@@ -34,54 +35,71 @@ class NetworkHandler(QObject):
             self.connectivity_checked.emit(False)
             return False
     
+    def set_token(self, token):
+        """
+        Establecer el token del estudiante autenticado
+
+        Args:
+            token (str): Token de 6 caracteres del estudiante
+        """
+        self.student_token = token
+
     def upload_files(self, pdf_path, raw_path, metadata):
         """
-        Subir archivos al servidor
-        
+        Subir archivos al servidor con autenticación por token
+
         Args:
             pdf_path (str): Ruta al archivo PDF
             raw_path (str): Ruta al archivo RAW
-            metadata (dict): Diccionario con 'owner', 'type', 'comments'
-            
+            metadata (dict): Diccionario con 'comments' (opcional)
+
         Returns:
             dict: Respuesta del servidor si exitoso, None si falla
         """
         DEBUG = True  # ← Cambiar a False para desactivar prints
-        
+
         try:
             if DEBUG:
                 print(f"DEBUG: Iniciando upload_files")
                 print(f"DEBUG: pdf_path existe: {os.path.exists(pdf_path)}")
                 print(f"DEBUG: raw_path existe: {os.path.exists(raw_path)}")
                 print(f"DEBUG: API URL: {self.api_url}")
-            
+                print(f"DEBUG: Token: {self.student_token}")
+
+            # Verificar que hay token
+            if not self.student_token:
+                error_msg = "No hay token de autenticación. Inicia sesión primero."
+                if DEBUG: print(f"DEBUG ERROR: {error_msg}")
+                self.upload_failed.emit(error_msg)
+                return None
+
             # Verificar que los archivos existen
             if not os.path.exists(pdf_path):
                 error_msg = f"Archivo PDF no encontrado: {pdf_path}"
                 if DEBUG: print(f"DEBUG ERROR: {error_msg}")
                 self.upload_failed.emit(error_msg)
                 return None
-                
+
             if not os.path.exists(raw_path):
                 error_msg = f"Archivo RAW no encontrado: {raw_path}"
                 if DEBUG: print(f"DEBUG ERROR: {error_msg}")
                 self.upload_failed.emit(error_msg)
                 return None
-            
+
             if DEBUG:
                 print(f"DEBUG: Archivos verificados, preparando upload...")
                 print(f"DEBUG: metadata = {metadata}")
-            
+
             # Preparar archivos para subir
             with open(pdf_path, "rb") as pdf_file, open(raw_path, "rb") as raw_file:
                 files = {
                     "pdf": (os.path.basename(pdf_path), pdf_file, "application/pdf"),
                     "raw": (os.path.basename(raw_path), raw_file, "application/octet-stream")
                 }
-                
+
+                # Enviar token en lugar de owner/type
                 data = {
-                    "owner": metadata.get('owner', 'Lab Física'),
-                    "type": metadata.get('type', 'Mediciones'),
+                    "token": self.student_token,
                     "comments": metadata.get('comments', '')
                 }
                 
@@ -241,10 +259,14 @@ class NetworkHandler(QObject):
                     # Preparar metadata para upload
                     patient_data = study_data.get('patient', {})
                     metadata = {
-                        'owner': patient_data.get('nombre', 'Paciente'),
-                        'type': 'Espirometría',
                         'comments': patient_data.get('comments', '')
                     }
+
+                    # Verificar que hay token antes de subir
+                    if not self.student_token:
+                        if DEBUG: print(f"DEBUG SYNC: No hay token configurado, saltando {json_filename}...")
+                        stats['failed'] += 1
+                        continue
                     
                     if DEBUG: print(f"DEBUG SYNC: Subiendo {json_filename}...")
                     

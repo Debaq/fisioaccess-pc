@@ -117,33 +117,47 @@ try {
         ], 403);
     }
 
-    // Verificar si hay estudiantes inscritos
-    $estudiantes = cargarJSON(ESTUDIANTES_FILE);
-    $inscritos = $actividad['configuracion']['estudiantes_inscritos'] ?? [];
+    // Validar acceso según el modo de registro configurado
+    $modo_registro = $actividad['accesos']['modo_registro'] ?? 'abierto';
 
-    // Si hay estudiantes inscritos, validar que el email esté en la lista
-    if (!empty($inscritos)) {
-        $estudiante_valido = false;
+    switch ($modo_registro) {
+        case 'dominio':
+            // Validar que el email sea del dominio institucional
+            $dominio_requerido = $actividad['accesos']['dominio_email'] ?? '@uach.cl';
+            $dominio_usuario = substr(strrchr($email, "@"), 0); // Incluye el @
 
-        // Buscar estudiante por email en la lista de inscritos
-        foreach ($inscritos as $rut_estudiante) {
-            if (isset($estudiantes[$rut_estudiante])) {
-                $email_estudiante = strtolower($estudiantes[$rut_estudiante]['email'] ?? '');
-                if ($email_estudiante === $email) {
-                    $estudiante_valido = true;
-                    break;
-                }
+            if (strtolower($dominio_usuario) !== strtolower($dominio_requerido)) {
+                responderJSON([
+                    'success' => false,
+                    'error' => 'El email debe ser del dominio ' . $dominio_requerido . '. Contacta a tu profesor si necesitas acceso.'
+                ], 403);
             }
-        }
+            break;
 
-        if (!$estudiante_valido) {
-            responderJSON([
-                'success' => false,
-                'error' => 'No estás inscrito en esta actividad. Contacta a tu profesor.'
-            ], 403);
-        }
+        case 'lista_blanca':
+            // Validar que el email esté en la lista autorizada
+            $emails_autorizados = $actividad['accesos']['emails_autorizados'] ?? [];
+
+            if (empty($emails_autorizados)) {
+                responderJSON([
+                    'success' => false,
+                    'error' => 'Esta actividad requiere lista de estudiantes autorizados pero no está configurada. Contacta a tu profesor.'
+                ], 403);
+            }
+
+            if (!in_array($email, $emails_autorizados)) {
+                responderJSON([
+                    'success' => false,
+                    'error' => 'No estás autorizado para esta actividad. Contacta a tu profesor para solicitar acceso.'
+                ], 403);
+            }
+            break;
+
+        case 'abierto':
+        default:
+            // Cualquier email válido es aceptado (ya fue validado arriba)
+            break;
     }
-    // Si no hay estudiantes inscritos, cualquier email válido es aceptado
 
     // Limpiar códigos expirados
     limpiarCodigosExpirados();

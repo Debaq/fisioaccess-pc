@@ -51,7 +51,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $protocolo = sanitizarString($_POST['protocolo'] ?? '', ['max_length' => 5000]);
                 $criterios_analisis = sanitizarString($_POST['criterios_analisis'] ?? '', ['max_length' => 5000]);
                 $password = $_POST['password'] ?? '';
+                $modo_registro = sanitizarString($_POST['modo_registro'] ?? 'abierto', ['max_length' => 20]);
                 $dominio_email = sanitizarString($_POST['dominio_email'] ?? '@uach.cl', ['max_length' => 100]);
+
+                // Procesar lista de emails autorizados
+                $emails_autorizados = [];
+                if ($modo_registro === 'lista_blanca' && !empty($_POST['emails_autorizados'])) {
+                    $lineas = explode("\n", $_POST['emails_autorizados']);
+                    foreach ($lineas as $linea) {
+                        $email = strtolower(trim($linea));
+                        if (!empty($email) && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                            $emails_autorizados[] = $email;
+                        }
+                    }
+                }
 
                 // Validaciones
                 $tipos_validos = ['espirometria', 'ecg', 'emg', 'eeg'];
@@ -122,8 +135,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             'url_base' => 'https://tmeduca.org/fisioaccess',
                             'link_directo' => '',
                             'html_embed' => '',
-                            'modo_registro' => sanitizarString($_POST['modo_registro'] ?? 'cerrado', ['max_length' => 20]),
+                            'modo_registro' => $modo_registro,
                             'dominio_email' => $dominio_email,
+                            'emails_autorizados' => $emails_autorizados,
                             'estudiantes_registrados' => [],
                             'fecha_generacion' => formatearFecha()
                         ]
@@ -874,6 +888,34 @@ value="0" min="0" max="100" step="0.1">
 </select>
 </div>
 
+<div class="form-full" style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 15px; margin-top: 10px;">
+<h3 style="color: white; margin-bottom: 15px; font-size: 16px;">🔐 Control de Acceso</h3>
+</div>
+
+<div class="form-full">
+<label>Modo de Registro *</label>
+<select name="modo_registro" id="form-modo-registro" onchange="toggleModoRegistro()">
+<option value="abierto">🌐 Abierto - Cualquier email válido</option>
+<option value="dominio">🏫 Solo dominio institucional</option>
+<option value="lista_blanca">📋 Solo lista de estudiantes autorizados</option>
+</select>
+<div class="help-text">Controla quién puede registrarse en esta actividad</div>
+</div>
+
+<div id="campo-dominio" style="display: none;">
+<label>Dominio de Email Institucional *</label>
+<input type="text" name="dominio_email" id="form-dominio" placeholder="@uach.cl" value="@uach.cl">
+<div class="help-text">Ejemplo: @uach.cl, @uc.cl, @usach.cl</div>
+</div>
+
+<div id="campo-lista-emails" class="form-full" style="display: none;">
+<label>Lista de Emails Autorizados</label>
+<textarea name="emails_autorizados" id="form-emails"
+placeholder="estudiante1@uach.cl&#10;estudiante2@uach.cl&#10;estudiante3@gmail.com"
+rows="5"></textarea>
+<div class="help-text">Un email por línea. Solo estos estudiantes podrán acceder.</div>
+</div>
+
 <div>
 <label>Contraseña de Acceso <span id="password-label">*</span></label>
 <input type="password" name="password" id="form-password" placeholder="••••••••">
@@ -1124,6 +1166,28 @@ function editarActividad(actividad) {
 
     document.getElementById('modalActividad').style.display = 'block';
 }
+
+function toggleModoRegistro() {
+    const modo = document.getElementById('form-modo-registro').value;
+    const campoDominio = document.getElementById('campo-dominio');
+    const campoListaEmails = document.getElementById('campo-lista-emails');
+
+    // Ocultar todos primero
+    campoDominio.style.display = 'none';
+    campoListaEmails.style.display = 'none';
+
+    // Mostrar según el modo seleccionado
+    if (modo === 'dominio') {
+        campoDominio.style.display = 'block';
+    } else if (modo === 'lista_blanca') {
+        campoListaEmails.style.display = 'block';
+    }
+}
+
+// Inicializar el estado correcto al cargar
+document.addEventListener('DOMContentLoaded', function() {
+    toggleModoRegistro();
+});
 
 function cerrarModal() {
     document.getElementById('modalActividad').style.display = 'none';

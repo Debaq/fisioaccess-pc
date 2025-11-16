@@ -45,20 +45,54 @@ try {
         ], 429);
     }
 
-    // Validar y sanitizar metadata
-    $owner = sanitizarString($_POST['owner'] ?? '', ['max_length' => 255]);
-    $type = sanitizarString($_POST['type'] ?? '', ['max_length' => 50]);
+    // Validar token del estudiante (REQUERIDO)
+    $token = sanitizarString($_POST['token'] ?? '', ['max_length' => 6]);
     $comments = sanitizarString($_POST['comments'] ?? '', ['max_length' => 1000]);
 
-    if (empty($owner)) {
+    if (empty($token)) {
         responderJSON([
             'success' => false,
-            'error' => 'Se requiere información del propietario (owner)'
+            'error' => 'Token de estudiante requerido. Por favor autentícate en el software.'
         ], 400);
     }
 
     // Registrar intento
     registrarIntento('ip', $ip);
+
+    // Validar token contra tokens.json
+    $tokens_file = DATA_PATH . '/tokens.json';
+    if (!file_exists($tokens_file)) {
+        responderJSON([
+            'success' => false,
+            'error' => 'Sistema de tokens no inicializado. Contacta al administrador.'
+        ], 500);
+    }
+
+    $tokens = json_decode(file_get_contents($tokens_file), true) ?? [];
+
+    if (!isset($tokens[$token])) {
+        responderJSON([
+            'success' => false,
+            'error' => 'Token inválido o expirado. Genera un nuevo token desde la plataforma web.'
+        ], 401);
+    }
+
+    $token_data = $tokens[$token];
+    $estudiante_rut = $token_data['rut'];
+    $actividad_id = $token_data['actividad_id'];
+
+    // Verificar que el token no esté expirado
+    $fecha_expira = strtotime($token_data['expira']);
+    if (time() > $fecha_expira) {
+        responderJSON([
+            'success' => false,
+            'error' => 'Token expirado. Genera un nuevo token desde la plataforma web.'
+        ], 401);
+    }
+
+    // Actualizar último uso del token
+    $tokens[$token]['ultimo_uso'] = formatearFecha();
+    guardarJSON($tokens_file, $tokens);
     
     // Validar archivos subidos
     $pdf = $_FILES['pdf'];
@@ -113,57 +147,52 @@ try {
     
     // Generar ID único para la entrega
     $entrega_id = generarID('ENT');
-    
-    // Determinar actividad y estudiante desde el RAW (si viene estructurado)
-    $raw_temp = $raw['tmp_name'];
-    $raw_data = json_decode(file_get_contents($raw_temp), true);
-    
-    // Intentar extraer información del RAW
-    $estudiante_rut = null;
-    $actividad_id = null;
-    
-    if ($raw_data && isset($raw_data['patient'])) {
-        $estudiante_rut = $raw_data['patient']['rut'] ?? null;
+
+    // Verificar que la actividad existe y está abierta
+    $actividades = cargarJSON(ACTIVIDADES_FILE);
+
+    if (!isset($actividades[$actividad_id])) {
+        responderJSON([
+            'success' => false,
+            'error' => 'Actividad no encontrada. El token puede estar asociado a una actividad eliminada.'
+        ], 404);
     }
-    
-    // Si no viene actividad_id en POST, buscar actividad abierta del tipo correcto
-    $actividad_id = $_POST['actividad_id'] ?? null;
-    
-    if (empty($actividad_id)) {
-        // Buscar actividad abierta del tipo de estudio correcto
-        $actividades = cargarJSON(ACTIVIDADES_FILE);
-        $tipo_estudio = $_POST['tipo_estudio'] ?? 'espirometria';
-        
-        $actividades_abiertas = array_filter($actividades, function($act) use ($tipo_estudio) {
-            $ahora = time();
-            $fecha_inicio = strtotime($act['info_basica']['fecha_inicio']);
-            $fecha_cierre = strtotime($act['info_basica']['fecha_cierre']);
-            
-            return $act['info_basica']['tipo_estudio'] === $tipo_estudio &&
-                   $fecha_inicio <= $ahora &&
-                   $fecha_cierre >= $ahora;
-        });
-        
-        if (!empty($actividades_abiertas)) {
-            $actividad = reset($actividades_abiertas);
-            $actividad_id = $actividad['id'];
-        }
+
+    $actividad = $actividades[$actividad_id];
+
+    // Verificar que la actividad esté abierta
+    $ahora = time();
+    $fecha_inicio = strtotime($actividad['info_basica']['fecha_inicio']);
+    $fecha_cierre = strtotime($actividad['info_basica']['fecha_cierre']);
+
+    if ($ahora < $fecha_inicio) {
+        responderJSON([
+            'success' => false,
+            'error' => 'La actividad aún no ha comenzado. Espera hasta el ' .
+                      date('d/m/Y H:i', $fecha_inicio)
+        ], 403);
     }
-    
-    // Si no se encuentra actividad, crear carpeta genérica "sin_actividad"
-    if (empty($actividad_id)) {
-        $actividad_id = 'sin_actividad';
-        $carpeta_entregas = UPLOADS_PATH . '/sin_actividad';
-        
-        if (!is_dir($carpeta_entregas)) {
-            mkdir($carpeta_entregas, 0755, true);
-        }
-    } else {
-        $carpeta_entregas = UPLOADS_PATH . '/' . $actividad_id . '/entregas';
-        
-        if (!is_dir($carpeta_entregas)) {
-            mkdir($carpeta_entregas, 0755, true);
-        }
+
+    if ($ahora > $fecha_cierre) {
+        responderJSON([
+            'success' => false,
+            'error' => 'La actividad ha finalizado. No se aceptan más entregas.'
+        ], 403);
+    }
+
+    // Verificar que el estudiante está inscrito en la actividad
+    if (!in_array($estudiante_rut, $actividad['estudiantes_inscritos'] ?? [])) {
+        responderJSON([
+            'success' => false,
+            'error' => 'No estás inscrito en esta actividad. Contacta a tu profesor.'
+        ], 403);
+    }
+
+    // Crear carpeta de entregas para la actividad
+    $carpeta_entregas = UPLOADS_PATH . '/' . $actividad_id . '/entregas';
+
+    if (!is_dir($carpeta_entregas)) {
+        mkdir($carpeta_entregas, 0755, true);
     }
     
     // Generar nombres únicos para archivos
@@ -193,15 +222,21 @@ try {
     
     // Crear registro de entrega
     $entregas = cargarJSON(ENTREGAS_FILE);
-    
+
+    // Obtener información del estudiante
+    $estudiantes = cargarJSON(ESTUDIANTES_FILE);
+    $estudiante = $estudiantes[$estudiante_rut] ?? null;
+    $nombre_estudiante = $estudiante['nombre'] ?? 'Desconocido';
+
     $entregas[$entrega_id] = [
         'id' => $entrega_id,
         'actividad_id' => $actividad_id,
-        'estudiante_rut' => $estudiante_rut ?? 'desconocido',
+        'estudiante_rut' => $estudiante_rut,
+        'estudiante_nombre' => $nombre_estudiante,
         'timestamp' => formatearFecha(),
         'metadata' => [
-            'owner' => $owner,
-            'type' => $type,
+            'token_usado' => $token,
+            'tipo_estudio' => $actividad['info_basica']['tipo_estudio'],
             'comments' => $comments
         ],
         'archivos' => [
@@ -226,23 +261,19 @@ try {
     guardarJSON(ENTREGAS_FILE, $entregas);
 
     // Registrar evento
-    registrarLog('INFO', 'Entrega recibida via API', [
+    registrarLog('INFO', 'Entrega recibida via API con token', [
         'entrega_id' => $entrega_id,
         'actividad_id' => $actividad_id,
-        'estudiante_rut' => $estudiante_rut ?? 'desconocido',
+        'estudiante_rut' => $estudiante_rut,
+        'estudiante_nombre' => $nombre_estudiante,
+        'token' => $token,
         'ip' => $ip
     ]);
 
-    // Actualizar estadísticas de actividad si existe
-    if ($actividad_id !== 'sin_actividad') {
-        $actividades = cargarJSON(ACTIVIDADES_FILE);
-        
-        if (isset($actividades[$actividad_id])) {
-            $actividades[$actividad_id]['estadisticas']['entregas_realizadas']++;
-            $actividades[$actividad_id]['estadisticas']['entregas_pendientes']++;
-            guardarJSON(ACTIVIDADES_FILE, $actividades);
-        }
-    }
+    // Actualizar estadísticas de actividad
+    $actividades[$actividad_id]['estadisticas']['entregas_realizadas']++;
+    $actividades[$actividad_id]['estadisticas']['entregas_pendientes']++;
+    guardarJSON(ACTIVIDADES_FILE, $actividades);
     
     // Respuesta exitosa
     responderJSON([
