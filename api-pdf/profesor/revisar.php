@@ -30,22 +30,71 @@ $mis_entregas = array_filter($todas_entregas, function($e) use ($mis_actividades
 
 // Procesar revisión
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['revisar'])) {
-    $entrega_id = $_POST['entrega_id'];
-    
-    if (isset($todas_entregas[$entrega_id])) {
-        $actividad_id = $todas_entregas[$entrega_id]['actividad_id'];
-        $actividad = $mis_actividades[$actividad_id];
-        
-        // Actualizar revisión
-        $todas_entregas[$entrega_id]['revision'] = [
-            'estado' => 'revisada',
-            'nota' => floatval($_POST['nota'] ?? 0),
-            'retroalimentacion' => trim($_POST['retroalimentacion'] ?? ''),
-            'fecha_revision' => formatearFecha(),
-            'revisor_rut' => $rut
-        ];
-        
-        guardarJSON(ENTREGAS_FILE, $todas_entregas);
+    // Validar CSRF token
+    $csrf_token = $_POST['csrf_token'] ?? '';
+    if (!validarTokenCSRF($csrf_token)) {
+        $mensaje = 'Token de seguridad inválido. Intenta nuevamente.';
+        $tipo_mensaje = 'error';
+        registrarEventoSeguridad('CSRF token inválido en revisar entrega', [
+            'profesor_rut' => $rut,
+            'ip' => obtenerIP()
+        ]);
+    } else {
+        // Sanitizar inputs
+        $entrega_id = sanitizarString($_POST['entrega_id'] ?? '', ['max_length' => 50]);
+        $nota = floatval($_POST['nota'] ?? 0);
+        $retroalimentacion = sanitizarString($_POST['retroalimentacion'] ?? '', ['max_length' => 2000]);
+
+        if (empty($entrega_id) || !isset($todas_entregas[$entrega_id])) {
+            $mensaje = 'Entrega no encontrada';
+            $tipo_mensaje = 'error';
+        } else {
+            $actividad_id = $todas_entregas[$entrega_id]['actividad_id'];
+            $actividad = $mis_actividades[$actividad_id];
+            $escala = $actividad['evaluacion']['escala'] ?? '1.0-7.0';
+
+            // Validar nota según escala
+            $nota_valida = false;
+            if ($escala === '1.0-7.0') {
+                if ($nota >= 1.0 && $nota <= 7.0) {
+                    $nota_valida = true;
+                } else {
+                    $mensaje = 'La nota debe estar entre 1.0 y 7.0';
+                    $tipo_mensaje = 'error';
+                }
+            } elseif ($escala === '0-100') {
+                if ($nota >= 0 && $nota <= 100) {
+                    $nota_valida = true;
+                } else {
+                    $mensaje = 'La nota debe estar entre 0 y 100';
+                    $tipo_mensaje = 'error';
+                }
+            } else {
+                // Escala alfanumérica (A-F), validar más adelante si es necesario
+                $nota_valida = true;
+            }
+
+            if ($nota_valida) {
+                // Actualizar revisión
+                $todas_entregas[$entrega_id]['revision'] = [
+                    'estado' => 'revisada',
+                    'nota' => $nota,
+                    'retroalimentacion' => $retroalimentacion,
+                    'fecha_revision' => formatearFecha(),
+                    'revisor_rut' => $rut
+                ];
+
+                guardarJSON(ENTREGAS_FILE, $todas_entregas);
+
+                // Logging
+                registrarLog('INFO', 'Entrega revisada', [
+                    'entrega_id' => $entrega_id,
+                    'actividad_id' => $actividad_id,
+                    'profesor_rut' => $rut,
+                    'estudiante_rut' => $todas_entregas[$entrega_id]['estudiante_rut'],
+                    'nota' => $nota,
+                    'ip' => obtenerIP()
+                ]);
         
         // Actualizar estadísticas de la actividad
         $revisadas = count(array_filter($todas_entregas, function($e) use ($actividad_id) {
@@ -65,23 +114,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['revisar'])) {
         $todas_actividades[$actividad_id]['estadisticas']['entregas_pendientes'] = $pendientes;
         $todas_actividades[$actividad_id]['estadisticas']['promedio_nota'] = round($promedio, 2);
         
-        guardarJSON(ACTIVIDADES_FILE, $todas_actividades);
-        
-        $mensaje = 'Entrega revisada exitosamente';
-        $tipo_mensaje = 'success';
-        
-        // Recargar datos
-        $mis_actividades = array_filter($todas_actividades, fn($a) => $a['profesor_rut'] === $rut);
-        $todas_entregas = cargarJSON(ENTREGAS_FILE);
-        $mis_entregas = array_filter($todas_entregas, function($e) use ($mis_actividades) {
-            return isset($mis_actividades[$e['actividad_id']]);
-        });
+                guardarJSON(ACTIVIDADES_FILE, $todas_actividades);
+
+                $mensaje = 'Entrega revisada exitosamente';
+                $tipo_mensaje = 'success';
+
+                // Recargar datos
+                $mis_actividades = array_filter($todas_actividades, fn($a) => $a['profesor_rut'] === $rut);
+                $todas_entregas = cargarJSON(ENTREGAS_FILE);
+                $mis_entregas = array_filter($todas_entregas, function($e) use ($mis_actividades) {
+                    return isset($mis_actividades[$e['actividad_id']]);
+                });
+            }
+        }
     }
 }
 
-// Filtros
-$filtro_actividad = $_GET['actividad'] ?? '';
-$filtro_estado = $_GET['estado'] ?? 'pendiente';
+// Filtros - Sanitizar
+$filtro_actividad = sanitizarString($_GET['actividad'] ?? '', ['max_length' => 50]);
+$filtro_estado = sanitizarString($_GET['estado'] ?? 'pendiente', ['max_length' => 20]);
+
+// Validar filtro_estado contra whitelist
+$estados_validos = ['pendiente', 'revisada', 'todas'];
+if (!in_array($filtro_estado, $estados_validos)) {
+    $filtro_estado = 'pendiente';
+}
 
 // Aplicar filtros
 $entregas_filtradas = $mis_entregas;
@@ -781,6 +838,7 @@ usort($entregas_filtradas, fn($a, $b) => strtotime($b['timestamp']) - strtotime(
             
             <form method="POST" id="form-revision">
                 <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="<?= generarTokenCSRF() ?>">
                     <input type="hidden" name="entrega_id" id="modal-entrega-id">
                     
                     <div class="form-info" id="modal-info">

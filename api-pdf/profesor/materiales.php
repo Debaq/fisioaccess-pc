@@ -13,13 +13,37 @@ if (!verificarRol('profesor')) {
 }
 
 $rut = $_SESSION['rut'];
-$actividad_id = $_GET['id'] ?? '';
+
+// Sanitizar y validar actividad_id
+$actividad_id = sanitizarString($_GET['id'] ?? '', ['max_length' => 50]);
+
+if (empty($actividad_id)) {
+    header('Location: actividades.php');
+    exit;
+}
+
+// Prevenir path traversal
+if (preg_match('/[\.\/\\\\]/', $actividad_id)) {
+    registrarEventoSeguridad('Intento de path traversal en materiales', [
+        'actividad_id' => $actividad_id,
+        'profesor_rut' => $rut,
+        'ip' => obtenerIP()
+    ]);
+    header('Location: actividades.php');
+    exit;
+}
+
 $mensaje = '';
 $tipo_mensaje = '';
 
 // Verificar que la actividad existe y pertenece al profesor
 $actividades = cargarJSON(ACTIVIDADES_FILE);
 if (!isset($actividades[$actividad_id]) || $actividades[$actividad_id]['profesor_rut'] !== $rut) {
+    registrarEventoSeguridad('Intento de acceso no autorizado a materiales de actividad', [
+        'actividad_id' => $actividad_id,
+        'profesor_rut' => $rut,
+        'ip' => obtenerIP()
+    ]);
     header('Location: actividades.php');
     exit;
 }
@@ -29,86 +53,268 @@ $materiales_dir = UPLOADS_PATH . '/' . $actividad_id . '/materiales';
 
 // Subir guía de laboratorio
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['guia'])) {
-    if ($_FILES['guia']['error'] === UPLOAD_ERR_OK) {
-        $filename = 'guia_laboratorio.pdf';
-        $destination = $materiales_dir . '/' . $filename;
-        
-        if (move_uploaded_file($_FILES['guia']['tmp_name'], $destination)) {
-            $actividades[$actividad_id]['material_pedagogico']['guia_laboratorio'] = [
-                'filename' => $filename,
-                'url' => 'data/uploads/' . $actividad_id . '/materiales/' . $filename,
-                'uploaded' => formatearFecha()
-            ];
-            
-            guardarJSON(ACTIVIDADES_FILE, $actividades);
-            $mensaje = 'Guía de laboratorio subida exitosamente';
-            $tipo_mensaje = 'success';
-        } else {
-            $mensaje = 'Error al subir la guía';
+    // Validar CSRF token
+    $csrf_token = $_POST['csrf_token'] ?? '';
+    if (!validarTokenCSRF($csrf_token)) {
+        $mensaje = 'Token de seguridad inválido. Intenta nuevamente.';
+        $tipo_mensaje = 'error';
+        registrarEventoSeguridad('CSRF token inválido en upload guía', [
+            'profesor_rut' => $rut,
+            'actividad_id' => $actividad_id,
+            'ip' => obtenerIP()
+        ]);
+    } elseif ($_FILES['guia']['error'] === UPLOAD_ERR_OK) {
+        // Validar extensión (solo PDF)
+        $ext = strtolower(pathinfo($_FILES['guia']['name'], PATHINFO_EXTENSION));
+        if ($ext !== 'pdf') {
+            $mensaje = 'Solo se permiten archivos PDF para la guía de laboratorio';
             $tipo_mensaje = 'error';
+        } elseif ($_FILES['guia']['size'] > PDF_MAX_SIZE) {
+            $mensaje = 'El archivo excede el tamaño máximo permitido (' . (PDF_MAX_SIZE / 1024 / 1024) . ' MB)';
+            $tipo_mensaje = 'error';
+        } else {
+            $filename = 'guia_laboratorio.pdf';
+            $destination = $materiales_dir . '/' . $filename;
+
+            // Validar path de destino
+            if (!is_dir($materiales_dir)) {
+                mkdir($materiales_dir, 0755, true);
+            }
+
+            $real_dest = realpath(dirname($destination));
+            $real_base = realpath(UPLOADS_PATH);
+            if ($real_dest === false || strpos($real_dest, $real_base) !== 0) {
+                $mensaje = 'Ruta de destino inválida';
+                $tipo_mensaje = 'error';
+                registrarEventoSeguridad('Intento de path traversal en destino de archivo', [
+                    'destination' => $destination,
+                    'profesor_rut' => $rut,
+                    'ip' => obtenerIP()
+                ]);
+            } elseif (move_uploaded_file($_FILES['guia']['tmp_name'], $destination)) {
+                $actividades[$actividad_id]['material_pedagogico']['guia_laboratorio'] = [
+                    'filename' => $filename,
+                    'url' => 'data/uploads/' . $actividad_id . '/materiales/' . $filename,
+                    'uploaded' => formatearFecha()
+                ];
+
+                guardarJSON(ACTIVIDADES_FILE, $actividades);
+
+                // Logging
+                registrarLog('INFO', 'Guía de laboratorio subida', [
+                    'actividad_id' => $actividad_id,
+                    'profesor_rut' => $rut,
+                    'filename' => $filename,
+                    'size' => $_FILES['guia']['size'],
+                    'ip' => obtenerIP()
+                ]);
+
+                $mensaje = 'Guía de laboratorio subida exitosamente';
+                $tipo_mensaje = 'success';
+            } else {
+                $mensaje = 'Error al subir la guía';
+                $tipo_mensaje = 'error';
+            }
         }
     }
 }
 
 // Subir material complementario
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['material'])) {
-    if ($_FILES['material']['error'] === UPLOAD_ERR_OK) {
-        $filename = time() . '_' . basename($_FILES['material']['name']);
-        $destination = $materiales_dir . '/' . $filename;
-        
-        if (move_uploaded_file($_FILES['material']['tmp_name'], $destination)) {
-            $tipo = $_POST['tipo_material'] ?? 'pdf';
-            $titulo = $_POST['titulo_material'] ?? $filename;
-            
-            $actividades[$actividad_id]['material_pedagogico']['material_complementario'][] = [
-                'tipo' => $tipo,
-                'titulo' => $titulo,
-                'filename' => $filename,
-                'url' => 'data/uploads/' . $actividad_id . '/materiales/' . $filename,
-                'uploaded' => formatearFecha()
-            ];
-            
-            guardarJSON(ACTIVIDADES_FILE, $actividades);
-            $mensaje = 'Material complementario subido exitosamente';
-            $tipo_mensaje = 'success';
+    // Validar CSRF token
+    $csrf_token = $_POST['csrf_token'] ?? '';
+    if (!validarTokenCSRF($csrf_token)) {
+        $mensaje = 'Token de seguridad inválido. Intenta nuevamente.';
+        $tipo_mensaje = 'error';
+        registrarEventoSeguridad('CSRF token inválido en upload material', [
+            'profesor_rut' => $rut,
+            'actividad_id' => $actividad_id,
+            'ip' => obtenerIP()
+        ]);
+    } elseif ($_FILES['material']['error'] === UPLOAD_ERR_OK) {
+        // Sanitizar inputs
+        $tipo = sanitizarString($_POST['tipo_material'] ?? 'pdf', ['max_length' => 20]);
+        $titulo = sanitizarString($_POST['titulo_material'] ?? '', ['max_length' => 200]);
+
+        // Validar tipo contra whitelist
+        $tipos_validos = ['pdf', 'video', 'imagen', 'otro'];
+        if (!in_array($tipo, $tipos_validos)) {
+            $mensaje = 'Tipo de material inválido';
+            $tipo_mensaje = 'error';
+        } elseif (validarNoVacio($titulo) !== true) {
+            $mensaje = 'El título es requerido';
+            $tipo_mensaje = 'error';
+        } else {
+            // Validar extensión de archivo
+            $ext = strtolower(pathinfo($_FILES['material']['name'], PATHINFO_EXTENSION));
+            $extensiones_permitidas = ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'gif', 'mp4', 'avi', 'mov', 'zip'];
+
+            if (!in_array($ext, $extensiones_permitidas)) {
+                $mensaje = 'Tipo de archivo no permitido. Extensiones permitidas: ' . implode(', ', $extensiones_permitidas);
+                $tipo_mensaje = 'error';
+            } elseif ($_FILES['material']['size'] > PDF_MAX_SIZE) {
+                $mensaje = 'El archivo excede el tamaño máximo permitido (' . (PDF_MAX_SIZE / 1024 / 1024) . ' MB)';
+                $tipo_mensaje = 'error';
+            } else {
+                // Generar nombre seguro (sin usar nombre original directamente)
+                $filename = time() . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
+                $destination = $materiales_dir . '/' . $filename;
+
+                // Validar path de destino
+                if (!is_dir($materiales_dir)) {
+                    mkdir($materiales_dir, 0755, true);
+                }
+
+                $real_dest = realpath(dirname($destination));
+                $real_base = realpath(UPLOADS_PATH);
+                if ($real_dest === false || strpos($real_dest, $real_base) !== 0) {
+                    $mensaje = 'Ruta de destino inválida';
+                    $tipo_mensaje = 'error';
+                    registrarEventoSeguridad('Intento de path traversal en destino de material', [
+                        'destination' => $destination,
+                        'profesor_rut' => $rut,
+                        'ip' => obtenerIP()
+                    ]);
+                } elseif (move_uploaded_file($_FILES['material']['tmp_name'], $destination)) {
+                    $actividades[$actividad_id]['material_pedagogico']['material_complementario'][] = [
+                        'tipo' => $tipo,
+                        'titulo' => $titulo,
+                        'filename' => $filename,
+                        'url' => 'data/uploads/' . $actividad_id . '/materiales/' . $filename,
+                        'uploaded' => formatearFecha()
+                    ];
+
+                    guardarJSON(ACTIVIDADES_FILE, $actividades);
+
+                    // Logging
+                    registrarLog('INFO', 'Material complementario subido', [
+                        'actividad_id' => $actividad_id,
+                        'profesor_rut' => $rut,
+                        'tipo' => $tipo,
+                        'titulo' => $titulo,
+                        'filename' => $filename,
+                        'size' => $_FILES['material']['size'],
+                        'ip' => obtenerIP()
+                    ]);
+
+                    $mensaje = 'Material complementario subido exitosamente';
+                    $tipo_mensaje = 'success';
+                } else {
+                    $mensaje = 'Error al subir el material';
+                    $tipo_mensaje = 'error';
+                }
+            }
         }
     }
 }
 
 // Agregar link externo
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['agregar_link'])) {
-    $actividades[$actividad_id]['material_pedagogico']['material_complementario'][] = [
-        'tipo' => 'link',
-        'titulo' => trim($_POST['titulo_link']),
-        'url' => trim($_POST['url_link']),
-        'uploaded' => formatearFecha()
-    ];
-    
-    guardarJSON(ACTIVIDADES_FILE, $actividades);
-    $mensaje = 'Link agregado exitosamente';
-    $tipo_mensaje = 'success';
+    // Validar CSRF token
+    $csrf_token = $_POST['csrf_token'] ?? '';
+    if (!validarTokenCSRF($csrf_token)) {
+        $mensaje = 'Token de seguridad inválido. Intenta nuevamente.';
+        $tipo_mensaje = 'error';
+        registrarEventoSeguridad('CSRF token inválido en agregar link', [
+            'profesor_rut' => $rut,
+            'actividad_id' => $actividad_id,
+            'ip' => obtenerIP()
+        ]);
+    } else {
+        // Sanitizar inputs
+        $titulo_link = sanitizarString($_POST['titulo_link'] ?? '', ['max_length' => 200]);
+        $url_link = sanitizarString($_POST['url_link'] ?? '', ['max_length' => 500]);
+
+        // Validar título
+        if (validarNoVacio($titulo_link) !== true) {
+            $mensaje = 'El título del link es requerido';
+            $tipo_mensaje = 'error';
+        } elseif (validarNoVacio($url_link) !== true) {
+            $mensaje = 'La URL es requerida';
+            $tipo_mensaje = 'error';
+        } else {
+            // Validar URL
+            $url_validada = filter_var($url_link, FILTER_VALIDATE_URL);
+            if ($url_validada === false) {
+                $mensaje = 'URL inválida. Debe comenzar con http:// o https://';
+                $tipo_mensaje = 'error';
+            } else {
+                $actividades[$actividad_id]['material_pedagogico']['material_complementario'][] = [
+                    'tipo' => 'link',
+                    'titulo' => $titulo_link,
+                    'url' => $url_validada,
+                    'uploaded' => formatearFecha()
+                ];
+
+                guardarJSON(ACTIVIDADES_FILE, $actividades);
+
+                // Logging
+                registrarLog('INFO', 'Link externo agregado', [
+                    'actividad_id' => $actividad_id,
+                    'profesor_rut' => $rut,
+                    'titulo' => $titulo_link,
+                    'url' => $url_validada,
+                    'ip' => obtenerIP()
+                ]);
+
+                $mensaje = 'Link agregado exitosamente';
+                $tipo_mensaje = 'success';
+            }
+        }
+    }
 }
 
 // Eliminar material
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['eliminar_material'])) {
-    $index = intval($_POST['material_index']);
-    
-    if (isset($actividades[$actividad_id]['material_pedagogico']['material_complementario'][$index])) {
-        $material = $actividades[$actividad_id]['material_pedagogico']['material_complementario'][$index];
-        
-        // Eliminar archivo si no es link
-        if ($material['tipo'] !== 'link' && isset($material['filename'])) {
-            $archivo = $materiales_dir . '/' . $material['filename'];
-            if (file_exists($archivo)) {
-                unlink($archivo);
+    // Validar CSRF token
+    $csrf_token = $_POST['csrf_token'] ?? '';
+    if (!validarTokenCSRF($csrf_token)) {
+        $mensaje = 'Token de seguridad inválido. Intenta nuevamente.';
+        $tipo_mensaje = 'error';
+        registrarEventoSeguridad('CSRF token inválido en eliminar material', [
+            'profesor_rut' => $rut,
+            'actividad_id' => $actividad_id,
+            'ip' => obtenerIP()
+        ]);
+    } else {
+        $index = intval($_POST['material_index'] ?? -1);
+
+        // Validar que el índice existe
+        if ($index < 0 || !isset($actividades[$actividad_id]['material_pedagogico']['material_complementario'][$index])) {
+            $mensaje = 'Material no encontrado';
+            $tipo_mensaje = 'error';
+        } else {
+            $material = $actividades[$actividad_id]['material_pedagogico']['material_complementario'][$index];
+
+            // Eliminar archivo si no es link
+            if ($material['tipo'] !== 'link' && isset($material['filename'])) {
+                // Sanitizar filename y prevenir path traversal
+                $filename = basename($material['filename']);
+                $archivo = $materiales_dir . '/' . $filename;
+
+                // Validar que el archivo está dentro del directorio permitido
+                $real_file = realpath($archivo);
+                $real_base = realpath($materiales_dir);
+                if ($real_file !== false && strpos($real_file, $real_base) === 0 && file_exists($archivo)) {
+                    unlink($archivo);
+                }
             }
+
+            array_splice($actividades[$actividad_id]['material_pedagogico']['material_complementario'], $index, 1);
+            guardarJSON(ACTIVIDADES_FILE, $actividades);
+
+            // Logging
+            registrarLog('INFO', 'Material eliminado', [
+                'actividad_id' => $actividad_id,
+                'profesor_rut' => $rut,
+                'material_tipo' => $material['tipo'],
+                'material_titulo' => $material['titulo'],
+                'ip' => obtenerIP()
+            ]);
+
+            $mensaje = 'Material eliminado exitosamente';
+            $tipo_mensaje = 'success';
         }
-        
-        array_splice($actividades[$actividad_id]['material_pedagogico']['material_complementario'], $index, 1);
-        guardarJSON(ACTIVIDADES_FILE, $actividades);
-        
-        $mensaje = 'Material eliminado exitosamente';
-        $tipo_mensaje = 'success';
     }
 }
 
@@ -356,6 +562,7 @@ $actividad = $actividades[$actividad_id];
             <?php endif; ?>
             
             <form method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="<?= generarTokenCSRF() ?>">
                 <div class="form-group">
                     <label>Subir Guía de Laboratorio (reemplaza la anterior)</label>
                     <input type="file" name="guia" accept=".pdf" required>
@@ -371,11 +578,12 @@ $actividad = $actividades[$actividad_id];
             <div class="section-title">📚 Material Complementario (Archivos)</div>
             
             <form method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="<?= generarTokenCSRF() ?>">
                 <div class="form-group">
                     <label>Título del Material</label>
                     <input type="text" name="titulo_material" placeholder="Ej: Paper de Miller et al. 2005" required>
                 </div>
-                
+
                 <div class="form-group">
                     <label>Tipo</label>
                     <select name="tipo_material">
@@ -385,12 +593,12 @@ $actividad = $actividades[$actividad_id];
                         <option value="otro">Otro</option>
                     </select>
                 </div>
-                
+
                 <div class="form-group">
                     <label>Archivo</label>
                     <input type="file" name="material" required>
                 </div>
-                
+
                 <button type="submit" class="btn btn-primary">Subir Material</button>
             </form>
         </div>
@@ -400,18 +608,19 @@ $actividad = $actividades[$actividad_id];
             <div class="section-title">🔗 Links Externos</div>
             
             <form method="POST">
+                <input type="hidden" name="csrf_token" value="<?= generarTokenCSRF() ?>">
                 <input type="hidden" name="agregar_link" value="1">
-                
+
                 <div class="form-group">
                     <label>Título del Link</label>
                     <input type="text" name="titulo_link" placeholder="Ej: Calculadora de valores predichos" required>
                 </div>
-                
+
                 <div class="form-group">
                     <label>URL</label>
                     <input type="url" name="url_link" placeholder="https://ejemplo.com" required>
                 </div>
-                
+
                 <button type="submit" class="btn btn-primary">Agregar Link</button>
             </form>
         </div>
@@ -450,6 +659,7 @@ $actividad = $actividades[$actividad_id];
                                 <a href="../<?= $mat['url'] ?>" class="btn btn-secondary btn-small" target="_blank">Descargar</a>
                             <?php endif; ?>
                             <form method="POST" style="display: inline;" onsubmit="return confirm('¿Eliminar este material?')">
+                                <input type="hidden" name="csrf_token" value="<?= generarTokenCSRF() ?>">
                                 <input type="hidden" name="eliminar_material" value="1">
                                 <input type="hidden" name="material_index" value="<?= $index ?>">
                                 <button type="submit" class="btn btn-danger btn-small">🗑️</button>
