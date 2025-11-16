@@ -17,72 +17,165 @@ $tipo_mensaje = '';
 
 // Procesar acciones
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? '';
-    
-    $profesores = cargarJSON(PROFESORES_FILE);
-    $config = cargarJSON(CONFIG_FILE);
-    
-    if ($action === 'crear') {
-        $rut = trim($_POST['rut']);
-        $nombre = trim($_POST['nombre']);
-        $email = trim($_POST['email']);
-        $password = $_POST['password'];
-        $cuota = intval($_POST['cuota_actividades'] ?? $config['cuotas_default']['actividades_profesor']);
-        
-        if (isset($profesores[$rut])) {
-            $mensaje = 'Ya existe un profesor con ese RUT';
-            $tipo_mensaje = 'error';
-        } else {
-            $profesores[$rut] = [
-                'rut' => $rut,
-                'nombre' => $nombre,
-                'email' => $email,
-                'password_hash' => password_hash($password, PASSWORD_DEFAULT),
-                'created' => formatearFecha(),
-                'activo' => true,
-                'cuota_actividades' => $cuota,
-                'actividades_usadas' => 0,
-                'departamento' => trim($_POST['departamento'] ?? ''),
-                'telefono' => trim($_POST['telefono'] ?? ''),
-                'last_login' => null
-            ];
-            
-            guardarJSON(PROFESORES_FILE, $profesores);
-            $mensaje = 'Profesor creado exitosamente';
-            $tipo_mensaje = 'success';
-        }
-    }
-    
-    elseif ($action === 'editar') {
-        $rut = trim($_POST['rut']);
-        
-        if (isset($profesores[$rut])) {
-            $profesores[$rut]['nombre'] = trim($_POST['nombre']);
-            $profesores[$rut]['email'] = trim($_POST['email']);
-            $profesores[$rut]['departamento'] = trim($_POST['departamento'] ?? '');
-            $profesores[$rut]['telefono'] = trim($_POST['telefono'] ?? '');
-            $profesores[$rut]['cuota_actividades'] = intval($_POST['cuota_actividades']);
-            
-            if (!empty($_POST['password'])) {
-                $profesores[$rut]['password_hash'] = password_hash($_POST['password'], PASSWORD_DEFAULT);
+    // Validar CSRF token
+    $csrf_token = $_POST['csrf_token'] ?? '';
+    if (!validarTokenCSRF($csrf_token)) {
+        $mensaje = 'Token de seguridad inválido. Intenta nuevamente.';
+        $tipo_mensaje = 'error';
+        registrarEventoSeguridad('CSRF token inválido en profesores', [
+            'admin_rut' => $_SESSION['rut'] ?? 'unknown',
+            'ip' => obtenerIP()
+        ]);
+    } else {
+        $action = sanitizarString($_POST['action'] ?? '', ['max_length' => 20]);
+
+        $profesores = cargarJSON(PROFESORES_FILE);
+        $config = cargarJSON(CONFIG_FILE);
+
+        if ($action === 'crear') {
+            // Sanitizar y validar inputs
+            $rut = sanitizarString($_POST['rut'] ?? '', ['max_length' => 12]);
+            $nombre = sanitizarString($_POST['nombre'] ?? '', ['max_length' => 200]);
+            $email = sanitizarString($_POST['email'] ?? '', ['max_length' => 255]);
+            $password = $_POST['password'] ?? '';
+            $cuota = intval($_POST['cuota_actividades'] ?? $config['cuotas_default']['actividades_profesor']);
+            $departamento = sanitizarString($_POST['departamento'] ?? '', ['max_length' => 200]);
+            $telefono = sanitizarString($_POST['telefono'] ?? '', ['max_length' => 20]);
+
+            // Validaciones
+            if (!validarRUT($rut)) {
+                $mensaje = 'RUT inválido';
+                $tipo_mensaje = 'error';
+            } elseif (!validarEmail($email)) {
+                $mensaje = 'Email inválido';
+                $tipo_mensaje = 'error';
+            } elseif (validarNoVacio($nombre) !== true) {
+                $mensaje = 'El nombre es requerido';
+                $tipo_mensaje = 'error';
+            } elseif (validarNoVacio($password) !== true || !validarLongitud($password, 6, 100)) {
+                $mensaje = 'La contraseña debe tener al menos 6 caracteres';
+                $tipo_mensaje = 'error';
+            } elseif ($cuota < 1 || $cuota > 20) {
+                $mensaje = 'La cuota debe estar entre 1 y 20';
+                $tipo_mensaje = 'error';
+            } elseif (isset($profesores[$rut])) {
+                $mensaje = 'Ya existe un profesor con ese RUT';
+                $tipo_mensaje = 'error';
+            } else {
+                $profesores[$rut] = [
+                    'rut' => $rut,
+                    'nombre' => $nombre,
+                    'email' => $email,
+                    'password_hash' => password_hash($password, PASSWORD_DEFAULT),
+                    'created' => formatearFecha(),
+                    'activo' => true,
+                    'cuota_actividades' => $cuota,
+                    'actividades_usadas' => 0,
+                    'departamento' => $departamento,
+                    'telefono' => $telefono,
+                    'last_login' => null
+                ];
+
+                guardarJSON(PROFESORES_FILE, $profesores);
+
+                // Logging
+                registrarLog('INFO', 'Profesor creado', [
+                    'admin_rut' => $_SESSION['rut'],
+                    'profesor_rut' => $rut,
+                    'nombre' => $nombre,
+                    'email' => $email,
+                    'ip' => obtenerIP()
+                ]);
+
+                $mensaje = 'Profesor creado exitosamente';
+                $tipo_mensaje = 'success';
             }
-            
-            guardarJSON(PROFESORES_FILE, $profesores);
-            $mensaje = 'Profesor actualizado exitosamente';
-            $tipo_mensaje = 'success';
         }
-    }
     
-    elseif ($action === 'toggle_activo') {
-        $rut = trim($_POST['rut']);
-        
-        if (isset($profesores[$rut])) {
-            $profesores[$rut]['activo'] = !$profesores[$rut]['activo'];
-            guardarJSON(PROFESORES_FILE, $profesores);
-            
-            $estado = $profesores[$rut]['activo'] ? 'activado' : 'desactivado';
-            $mensaje = "Profesor {$estado} exitosamente";
-            $tipo_mensaje = 'success';
+
+        elseif ($action === 'editar') {
+            // Sanitizar y validar inputs
+            $rut = sanitizarString($_POST['rut'] ?? '', ['max_length' => 12]);
+            $nombre = sanitizarString($_POST['nombre'] ?? '', ['max_length' => 200]);
+            $email = sanitizarString($_POST['email'] ?? '', ['max_length' => 255]);
+            $password = $_POST['password'] ?? '';
+            $cuota = intval($_POST['cuota_actividades'] ?? 4);
+            $departamento = sanitizarString($_POST['departamento'] ?? '', ['max_length' => 200]);
+            $telefono = sanitizarString($_POST['telefono'] ?? '', ['max_length' => 20]);
+
+            // Validaciones
+            if (!validarRUT($rut)) {
+                $mensaje = 'RUT inválido';
+                $tipo_mensaje = 'error';
+            } elseif (!validarEmail($email)) {
+                $mensaje = 'Email inválido';
+                $tipo_mensaje = 'error';
+            } elseif (validarNoVacio($nombre) !== true) {
+                $mensaje = 'El nombre es requerido';
+                $tipo_mensaje = 'error';
+            } elseif ($cuota < 1 || $cuota > 20) {
+                $mensaje = 'La cuota debe estar entre 1 y 20';
+                $tipo_mensaje = 'error';
+            } elseif (!empty($password) && !validarLongitud($password, 6, 100)) {
+                $mensaje = 'La contraseña debe tener al menos 6 caracteres';
+                $tipo_mensaje = 'error';
+            } elseif (!isset($profesores[$rut])) {
+                $mensaje = 'Profesor no encontrado';
+                $tipo_mensaje = 'error';
+            } else {
+                $profesores[$rut]['nombre'] = $nombre;
+                $profesores[$rut]['email'] = $email;
+                $profesores[$rut]['departamento'] = $departamento;
+                $profesores[$rut]['telefono'] = $telefono;
+                $profesores[$rut]['cuota_actividades'] = $cuota;
+
+                if (!empty($password)) {
+                    $profesores[$rut]['password_hash'] = password_hash($password, PASSWORD_DEFAULT);
+                }
+
+                guardarJSON(PROFESORES_FILE, $profesores);
+
+                // Logging
+                registrarLog('INFO', 'Profesor editado', [
+                    'admin_rut' => $_SESSION['rut'],
+                    'profesor_rut' => $rut,
+                    'nombre' => $nombre,
+                    'email' => $email,
+                    'password_changed' => !empty($password),
+                    'ip' => obtenerIP()
+                ]);
+
+                $mensaje = 'Profesor actualizado exitosamente';
+                $tipo_mensaje = 'success';
+            }
+        }
+
+        elseif ($action === 'toggle_activo') {
+            $rut = sanitizarString($_POST['rut'] ?? '', ['max_length' => 12]);
+
+            if (!validarRUT($rut)) {
+                $mensaje = 'RUT inválido';
+                $tipo_mensaje = 'error';
+            } elseif (!isset($profesores[$rut])) {
+                $mensaje = 'Profesor no encontrado';
+                $tipo_mensaje = 'error';
+            } else {
+                $profesores[$rut]['activo'] = !$profesores[$rut]['activo'];
+                guardarJSON(PROFESORES_FILE, $profesores);
+
+                $estado = $profesores[$rut]['activo'] ? 'activado' : 'desactivado';
+
+                // Logging
+                registrarLog('INFO', "Profesor {$estado}", [
+                    'admin_rut' => $_SESSION['rut'],
+                    'profesor_rut' => $rut,
+                    'nuevo_estado' => $profesores[$rut]['activo'],
+                    'ip' => obtenerIP()
+                ]);
+
+                $mensaje = "Profesor {$estado} exitosamente";
+                $tipo_mensaje = 'success';
+            }
         }
     }
 }
@@ -410,6 +503,7 @@ $config = cargarJSON(CONFIG_FILE);
                                     ✏️ Editar
                                 </button>
                                 <form method="POST" style="display: inline;">
+                                    <input type="hidden" name="csrf_token" value="<?= generarTokenCSRF() ?>">
                                     <input type="hidden" name="action" value="toggle_activo">
                                     <input type="hidden" name="rut" value="<?= $rut ?>">
                                     <button type="submit" class="btn <?= $prof['activo'] ? 'btn-danger' : 'btn-success' ?> btn-small">
@@ -429,6 +523,7 @@ $config = cargarJSON(CONFIG_FILE);
         <div class="modal-content">
             <h2 class="modal-header" id="modal-titulo">Nuevo Profesor</h2>
             <form method="POST" id="formProfesor">
+                <input type="hidden" name="csrf_token" value="<?= generarTokenCSRF() ?>">
                 <input type="hidden" name="action" id="form-action" value="crear">
                 
                 <div class="form-grid">

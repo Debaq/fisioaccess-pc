@@ -17,15 +17,47 @@ $tipo_mensaje = '';
 
 // Procesar actualización
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $config = cargarJSON(CONFIG_FILE);
-    
-    $config['cuotas_default']['actividades_profesor'] = intval($_POST['cuota_actividades'] ?? 4);
-    $config['cuotas_default']['estudios_por_tipo'] = intval($_POST['cuota_estudios'] ?? 1);
-    
-    guardarJSON(CONFIG_FILE, $config);
-    
-    $mensaje = 'Configuración actualizada exitosamente';
-    $tipo_mensaje = 'success';
+    // Validar CSRF token
+    $csrf_token = $_POST['csrf_token'] ?? '';
+    if (!validarTokenCSRF($csrf_token)) {
+        $mensaje = 'Token de seguridad inválido. Intenta nuevamente.';
+        $tipo_mensaje = 'error';
+        registrarEventoSeguridad('CSRF token inválido en config', [
+            'admin_rut' => $_SESSION['rut'] ?? 'unknown',
+            'ip' => obtenerIP()
+        ]);
+    } else {
+        $config = cargarJSON(CONFIG_FILE);
+
+        // Validar y sanitizar inputs
+        $cuota_actividades = intval($_POST['cuota_actividades'] ?? 4);
+        $cuota_estudios = intval($_POST['cuota_estudios'] ?? 1);
+
+        // Validar rangos
+        if ($cuota_actividades < 1 || $cuota_actividades > 20) {
+            $mensaje = 'Cuota de actividades debe estar entre 1 y 20';
+            $tipo_mensaje = 'error';
+        } elseif ($cuota_estudios < 1 || $cuota_estudios > 10) {
+            $mensaje = 'Cuota de estudios debe estar entre 1 y 10';
+            $tipo_mensaje = 'error';
+        } else {
+            $config['cuotas_default']['actividades_profesor'] = $cuota_actividades;
+            $config['cuotas_default']['estudios_por_tipo'] = $cuota_estudios;
+
+            guardarJSON(CONFIG_FILE, $config);
+
+            // Logging
+            registrarLog('INFO', 'Configuración actualizada', [
+                'admin_rut' => $_SESSION['rut'],
+                'cuota_actividades' => $cuota_actividades,
+                'cuota_estudios' => $cuota_estudios,
+                'ip' => obtenerIP()
+            ]);
+
+            $mensaje = 'Configuración actualizada exitosamente';
+            $tipo_mensaje = 'success';
+        }
+    }
 }
 
 $config = cargarJSON(CONFIG_FILE);
@@ -228,6 +260,7 @@ $config = cargarJSON(CONFIG_FILE);
             </div>
             
             <form method="POST">
+                <input type="hidden" name="csrf_token" value="<?= generarTokenCSRF() ?>">
                 <div class="section-title">Cuotas por Defecto</div>
                 
                 <div class="form-group">
