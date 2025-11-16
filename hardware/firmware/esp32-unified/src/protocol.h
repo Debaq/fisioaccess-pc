@@ -15,20 +15,20 @@
 #define ID_PRESION_BAR 0x03
 
 // ECG - Electrocardiograma (0x10-0x1F)
-#define ID_ECG_CH1 0x10
-#define ID_ECG_CH2 0x11
-#define ID_ECG_CH3 0x12
-#define ID_ECG_CH4 0x13
-#define ID_HEART_RATE 0x14
-#define ID_SPO2 0x15
-#define ID_ECG_LD_PLUS 0x16   // Estado del lead detection positivo
-#define ID_ECG_LD_MINUS 0x17  // Estado del lead detection negativo
+#define ID_ECG_CH1 0x10         // ECG Canal 1 (RAW ADC)
+#define ID_ECG_CH2 0x11         // ECG Canal 2 (RAW ADC)
+#define ID_ECG_CH3 0x12         // ECG Canal 3 (RAW ADC)
+#define ID_ECG_CH4 0x13         // ECG Canal 4 (RAW ADC)
+#define ID_HEART_RATE 0x14      // Frecuencia cardíaca calculada (BPM) - Procesado en Python
+#define ID_SPO2 0x15            // SpO2 (%) - Procesado en Python
+#define ID_ECG_LD_PLUS 0x16     // Estado del lead detection positivo (0/1)
+#define ID_ECG_LD_MINUS 0x17    // Estado del lead detection negativo (0/1)
 
 // EMG - Electromiograma (0x18-0x1F)
-#define ID_EMG_CH1 0x18
-#define ID_EMG_CH2 0x19
-#define ID_EMG_CH3 0x1A
-#define ID_EMG_CH4 0x1B
+#define ID_EMG_CH1 0x18         // EMG Canal 1 (RAW ADC)
+#define ID_EMG_CH2 0x19         // EMG Canal 2 (RAW ADC)
+#define ID_EMG_CH3 0x1A         // EMG Canal 3 (RAW ADC)
+#define ID_EMG_CH4 0x1B         // EMG Canal 4 (RAW ADC)
 
 // ADC Genérico
 #define ID_ADC_CH0 0x20
@@ -40,12 +40,9 @@
 #define ID_PRESION_AIRE 0x30
 #define ID_CELULA_CARGA 0x31
 #define ID_FUERZA 0x32
-#define ID_PRESION_1 0x33      // Presión sensor 1 (kPa) - Espirometría
-#define ID_PRESION_2 0x34      // Presión sensor 2 (kPa) - Rinomanometría
-#define ID_FLUJO_1 0x35        // Flujo calculado sensor 1 (L/s)
-#define ID_FLUJO_2 0x36        // Flujo calculado sensor 2 (L/s)
-#define ID_VOLUMEN_1 0x37      // Volumen acumulado sensor 1 (L)
-#define ID_VOLUMEN_2 0x38      // Volumen acumulado sensor 2 (L)
+#define ID_PRESION_1 0x33      // Sensor 1 RAW ADC (HX710B 24-bit) - Espirometría
+#define ID_PRESION_2 0x34      // Sensor 2 RAW ADC (HX710B 24-bit) - Rinomanometría
+// IDs 0x35-0x38 reservados para datos procesados en Python (flujo, volumen, etc.)
 
 // EEG TGAM
 #define ID_TGAM_QUALITY 0x40

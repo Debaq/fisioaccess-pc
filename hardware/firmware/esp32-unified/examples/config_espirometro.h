@@ -39,10 +39,6 @@
   // Sensor 2
   #define MPS_DOUT_PIN_2 7
   #define MPS_SCK_PIN_2 4
-  // Calibración
-  #define MPS_COUNTS_TO_KPA 0.000028
-  #define MPS_DIVISION_FACTOR 14.388
-  #define MPS_CALIBRATION_SAMPLES 50
 #endif
 
 #endif

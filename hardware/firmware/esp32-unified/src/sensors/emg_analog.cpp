@@ -33,14 +33,12 @@ void EMG_Analog::read() {
 
   lastSampleTime = currentTime;
 
-  // Leer valor analógico (0-4095 en ESP32 con 12 bits)
-  int adcValue = analogRead(EMG_ANALOG_PIN);
+  // Leer valor RAW del ADC (12-bit, 0-4095)
+  int adcRaw = analogRead(EMG_ANALOG_PIN);
 
-  // Convertir a voltaje (0-3.3V)
-  float voltage = (adcValue / 4095.0) * 3.3;
-
-  // Enviar valor RAW (voltaje)
-  addData(ID_EMG_CH1, voltage);
+  // Enviar valor RAW del ADC como float
+  // Python se encargará de convertir a voltaje (0-3.3V)
+  addData(ID_EMG_CH1, (float)adcRaw);
 }
 
 EMG_Analog::~EMG_Analog() {

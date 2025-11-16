@@ -55,14 +55,12 @@ void ECG_Analog::read() {
   addData(ID_ECG_LD_PLUS, ldPlus ? 1.0 : 0.0);
   addData(ID_ECG_LD_MINUS, ldMinus ? 1.0 : 0.0);
 
-  // Leer valor analógico (0-4095 en ESP32 con 12 bits)
-  int adcValue = analogRead(ECG_ANALOG_PIN);
+  // Leer valor RAW del ADC (12-bit, 0-4095)
+  int adcRaw = analogRead(ECG_ANALOG_PIN);
 
-  // Convertir a voltaje (0-3.3V)
-  float voltage = (adcValue / 4095.0) * 3.3;
-
-  // Enviar valor RAW (voltaje)
-  addData(ID_ECG_CH1, voltage);
+  // Enviar valor RAW del ADC como float
+  // Python se encargará de convertir a voltaje (0-3.3V)
+  addData(ID_ECG_CH1, (float)adcRaw);
 }
 
 ECG_Analog::~ECG_Analog() {

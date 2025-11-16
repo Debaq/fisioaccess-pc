@@ -9,55 +9,65 @@ Firmware modular para ESP32 que implementa el protocolo binario de comunicación
 - **Múltiples sensores soportados** con activación por configuración
 - **Comunicación flexible**: Serial, WiFi o Bluetooth
 - **Un solo firmware** para todos los dispositivos
+- **Datos RAW**: Todos los sensores envían valores sin procesar - el procesamiento se realiza en Python
 
 ## Dispositivos Soportados
 
 ### 1. Espirómetro/Rinomanómetro (MPS20N0040D Dual)
 
 - **Sensores**: 2x MPS20N0040D con HX710B (ADC 24-bit)
-- **Mediciones**: Presión, flujo y volumen en ambos sensores
+- **Datos enviados**: Valores RAW del ADC (24-bit con signo)
 - **Aplicaciones**: Espirometría, rinomanometría
 - **Protocolo IDs**:
-  - `0x33` - Presión sensor 1 (kPa)
-  - `0x34` - Presión sensor 2 (kPa)
-  - `0x35` - Flujo sensor 1 (L/s)
-  - `0x36` - Flujo sensor 2 (L/s)
-  - `0x37` - Volumen acumulado sensor 1 (L)
-  - `0x38` - Volumen acumulado sensor 2 (L)
+  - `0x33` - Sensor 1 RAW ADC (Python convierte a kPa, calcula flujo y volumen)
+  - `0x34` - Sensor 2 RAW ADC (Python convierte a kPa, calcula flujo y volumen)
+- **Procesamiento en Python**:
+  - Calibración (restar offset)
+  - Conversión a kPa
+  - Cálculo de flujo (L/s)
+  - Integración de volumen (L)
 
 ### 2. Electrocardiograma (ECG)
 
 #### ECG con ADS1115
 - **ADC**: ADS1115 16-bit I2C
 - **Canal**: A0 del ADS1115
+- **Datos enviados**: Valores RAW del ADC (16-bit con signo, -32768 a +32767)
 - **Lead Detection**: Pines D2 (LD+) y D3 (LD-)
 - **Frecuencia**: 860 SPS
 - **Protocolo IDs**:
-  - `0x10` - ECG Canal 1 (voltaje)
+  - `0x10` - ECG Canal 1 RAW ADC (Python convierte a voltaje)
   - `0x16` - Estado LD+ (0/1)
   - `0x17` - Estado LD- (0/1)
+- **Procesamiento en Python**: Conversión a voltaje según ganancia del ADS1115
 
 #### ECG Analógico Directo
 - **ADC**: ADC interno ESP32 (12-bit)
 - **Pin**: GPIO36 (A0)
+- **Datos enviados**: Valores RAW del ADC (12-bit, 0-4095)
 - **Lead Detection**: Pines D2 (LD+) y D3 (LD-)
 - **Frecuencia**: Configurable (default 500 Hz)
 - **Protocolo IDs**: Mismos que ECG con ADS1115
+- **Procesamiento en Python**: Conversión a voltaje (0-3.3V)
 
 ### 3. Electromiografía (EMG)
 
 #### EMG con ADS1115
 - **ADC**: ADS1115 16-bit I2C
 - **Canal**: A0 del ADS1115
+- **Datos enviados**: Valores RAW del ADC (16-bit con signo, -32768 a +32767)
 - **Frecuencia**: 860 SPS
 - **Protocolo IDs**:
-  - `0x18` - EMG Canal 1 (voltaje)
+  - `0x18` - EMG Canal 1 RAW ADC (Python convierte a voltaje)
+- **Procesamiento en Python**: Conversión a voltaje según ganancia del ADS1115
 
 #### EMG Analógico Directo
 - **ADC**: ADC interno ESP32 (12-bit)
 - **Pin**: GPIO39 (A3)
+- **Datos enviados**: Valores RAW del ADC (12-bit, 0-4095)
 - **Frecuencia**: Configurable (default 500 Hz)
 - **Protocolo IDs**: Mismo que EMG con ADS1115
+- **Procesamiento en Python**: Conversión a voltaje (0-3.3V)
 
 ## Estructura del Proyecto
 
@@ -150,7 +160,27 @@ Ver [README principal del firmware](../README.md) para detalles completos del pr
 
 Cada dato incluye:
 - **ID** (1 byte): Identificador del sensor/medición
-- **Valor** (4 bytes): Float en little-endian
+- **Valor** (4 bytes): Float en little-endian (valor RAW del ADC)
+
+### Principio de Datos RAW
+
+**IMPORTANTE**: El firmware **SOLO** envía valores RAW de los ADC, sin ningún procesamiento:
+
+- **MPS20N0040D (HX710B)**: Envía valor directo del ADC de 24-bit (-8388608 a +8388607)
+- **ADS1115**: Envía valor directo del ADC de 16-bit (-32768 a +32767)
+- **ESP32 ADC**: Envía valor directo del ADC de 12-bit (0 a 4095)
+
+**Todo el procesamiento se realiza en Python**:
+- Calibración (offset)
+- Conversión a unidades físicas (voltios, kPa, etc.)
+- Filtrado de señales
+- Cálculos derivados (flujo, volumen, frecuencia cardíaca, etc.)
+
+**Ventajas de este enfoque**:
+- Mayor flexibilidad para ajustar algoritmos sin recompilar firmware
+- Acceso a datos crudos para análisis y depuración
+- Firmware más simple y confiable
+- Procesamiento complejo en Python (numpy, scipy, pandas)
 
 ## Configuraciones de Hardware
 
@@ -210,16 +240,16 @@ Señal EMG -> GPIO 39 (A3)
 
 ## Calibración
 
-### MPS20N0040D
+**El firmware NO realiza calibración**. Todos los sensores envían datos RAW sin procesar.
 
-Al iniciar, el sistema calibra automáticamente ambos sensores:
-1. Asegurar que no hay flujo de aire
-2. Esperar mensaje de calibración completa
-3. El offset se calcula automáticamente
+La calibración se realiza completamente en Python:
+- **MPS20N0040D**: Python calcula el offset promediando muestras en reposo y lo resta de las lecturas
+- **ECG/EMG**: Python aplica filtros, normalización y corrección de baseline según sea necesario
 
-### ECG/EMG
-
-No requiere calibración. Los valores RAW se envían directamente al PC para procesamiento posterior.
+Ventajas:
+- Recalibrar sin reiniciar el ESP32
+- Guardar múltiples perfiles de calibración
+- Ajustar parámetros en tiempo real
 
 ## Ejemplos de Uso
 

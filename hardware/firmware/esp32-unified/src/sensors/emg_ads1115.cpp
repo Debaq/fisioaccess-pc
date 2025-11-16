@@ -25,14 +25,12 @@ void EMG_ADS1115::init() {
 }
 
 void EMG_ADS1115::read() {
-  // Leer señal EMG del canal configurado
-  int16_t adc = ads->readADC_SingleEnded(EMG_ADS_CHANNEL);
+  // Leer valor RAW del ADC (16-bit signed, -32768 a +32767)
+  int16_t adcRaw = ads->readADC_SingleEnded(EMG_ADS_CHANNEL);
 
-  // Convertir a voltaje
-  float voltage = ads->computeVolts(adc);
-
-  // Enviar valor RAW (voltaje)
-  addData(ID_EMG_CH1, voltage);
+  // Enviar valor RAW del ADC como float
+  // Python se encargará de convertir a voltaje según la ganancia configurada
+  addData(ID_EMG_CH1, (float)adcRaw);
 }
 
 EMG_ADS1115::~EMG_ADS1115() {
