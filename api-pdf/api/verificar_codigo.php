@@ -105,16 +105,19 @@ try {
 
     // Si no existe el estudiante, crearlo automáticamente
     if (!$estudiante) {
-        $rut_estudiante = generarToken(12);
+        // Generar student_id determinístico basado en email (NO RUT falso)
+        // Esto permite identificar al estudiante de forma única y consistente
+        $rut_estudiante = 'STU-' . strtoupper(substr(hash('sha256', $email), 0, 10));
         $nombre = explode('@', $email)[0];
 
         $estudiante = [
-            'rut' => $rut_estudiante,
+            'rut' => $rut_estudiante,  // Ahora es un student_id, no un RUT chileno
             'nombre' => ucfirst($nombre),
             'email' => $email,
             'activo' => true,
             'created' => formatearFecha(),
-            'actividades' => [$actividad_id]
+            'actividades' => [$actividad_id],
+            'rut_real' => null  // El estudiante puede proveerlo más adelante si es necesario
         ];
 
         $estudiantes[$rut_estudiante] = $estudiante;

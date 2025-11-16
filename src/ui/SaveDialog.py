@@ -4,245 +4,145 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
 from PySide6.QtCore import Qt, QDate
 
 class SaveDialog(QDialog):
-    """Diálogo para solicitar información antes de guardar un estudio"""
-    
-    def __init__(self, parent=None, patient_data=None):
+    """Diálogo para solicitar comentarios antes de guardar un estudio"""
+
+    def __init__(self, parent=None, patient_data=None, activity_name=None):
         super().__init__(parent)
         self.setWindowTitle("Guardar Estudio")
         self.setModal(True)
         self.setMinimumWidth(450)
-        
+
         # Datos del formulario
         self.patient_data = patient_data
-        
+        self.activity_name = activity_name
+
         self.setup_ui()
         
     def setup_ui(self):
         """Configurar la interfaz del diálogo"""
         layout = QVBoxLayout(self)
-        
+        layout.setSpacing(15)
+
         # Título
-        title_label = QLabel("Datos del Paciente")
-        title_label.setStyleSheet("font-size: 12pt; font-weight: bold;")
+        title_label = QLabel("📝 Guardar Estudio")
+        title_label.setStyleSheet("font-size: 14pt; font-weight: bold; color: #7c3aed;")
         layout.addWidget(title_label)
+
+        # Información de la actividad (si está disponible)
+        if self.activity_name:
+            activity_label = QLabel(f"Actividad: {self.activity_name}")
+            activity_label.setStyleSheet(
+                "background-color: #f0f9ff; "
+                "border: 1px solid #7c3aed; "
+                "border-radius: 6px; "
+                "padding: 10px; "
+                "font-weight: bold;"
+            )
+            layout.addWidget(activity_label)
         
-        # Formulario
-        form_layout = QFormLayout()
-        
-        # Nombre
-        self.nombre_edit = QLineEdit()
-        self.nombre_edit.setPlaceholderText("Nombre completo del paciente")
-        form_layout.addRow("Nombre:*", self.nombre_edit)
-        
-        # RUT
-        self.rut_edit = QLineEdit()
-        self.rut_edit.setPlaceholderText("12.345.678-9")
-        form_layout.addRow("RUT:*", self.rut_edit)
-        
-        # Sexo
-        self.sexo_combo = QComboBox()
-        self.sexo_combo.addItems([
-            "Masculino",
-            "Femenino",
-            "Otro"
-        ])
-        form_layout.addRow("Sexo:*", self.sexo_combo)
-        
-        # Fecha de Nacimiento
-        self.fecha_nacimiento = QDateEdit()
-        self.fecha_nacimiento.setCalendarPopup(True)
-        self.fecha_nacimiento.setDate(QDate.currentDate().addYears(-30))
-        self.fecha_nacimiento.setDisplayFormat("dd/MM/yyyy")
-        self.fecha_nacimiento.setMaximumDate(QDate.currentDate())
-        form_layout.addRow("Fecha Nacimiento:*", self.fecha_nacimiento)
-        
-        # Edad (se calcula automáticamente)
-        self.edad_spin = QSpinBox()
-        self.edad_spin.setRange(0, 150)
-        self.edad_spin.setValue(30)
-        self.edad_spin.setSuffix(" años")
-        self.edad_spin.setReadOnly(True)
-        self.edad_spin.setEnabled(False)
-        form_layout.addRow("Edad:", self.edad_spin)
-        
-        # Conectar cambio de fecha para actualizar edad
-        self.fecha_nacimiento.dateChanged.connect(self.calcular_edad)
-        
-        # Etnia
-        self.etnia_combo = QComboBox()
-        self.etnia_combo.addItems([
-            "Mestizo",
-            "Mapuche",
-            "Aymara",
-            "Rapa Nui",
-            "Diaguita",
-            "Quechua",
-            "Caucásico",
-            "Otro"
-        ])
-        form_layout.addRow("Etnia:", self.etnia_combo)
-        
-        # Estatura
-        self.estatura_spin = QSpinBox()
-        self.estatura_spin.setRange(50, 250)
-        self.estatura_spin.setValue(170)
-        self.estatura_spin.setSuffix(" cm")
-        form_layout.addRow("Estatura:*", self.estatura_spin)
-        
-        # Peso
-        self.peso_spin = QDoubleSpinBox()
-        self.peso_spin.setRange(10.0, 300.0)
-        self.peso_spin.setValue(70.0)
-        self.peso_spin.setSuffix(" kg")
-        self.peso_spin.setDecimals(1)
-        form_layout.addRow("Peso:*", self.peso_spin)
-        
-        # Campo Comments (opcional)
+        # Instrucciones
+        instructions_label = QLabel(
+            "El estudio se guardará y subirá automáticamente a la plataforma.\n"
+            "Puedes agregar comentarios opcionales sobre este estudio:"
+        )
+        instructions_label.setWordWrap(True)
+        instructions_label.setStyleSheet("color: #666; margin: 10px 0;")
+        layout.addWidget(instructions_label)
+
+        # Campo de comentarios (opcional)
+        comments_label = QLabel("Comentarios (opcional):")
+        comments_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
+        layout.addWidget(comments_label)
+
         self.comments_edit = QTextEdit()
         self.comments_edit.setPlaceholderText(
-            "Observaciones adicionales (opcional):\n"
-            "- Condiciones de medición\n"
-            "- Medicación actual\n"
-            "- Observaciones relevantes"
+            "Puedes agregar observaciones sobre este estudio:\n"
+            "• Condiciones del sujeto\n"
+            "• Observaciones durante la medición\n"
+            "• Notas relevantes para el análisis"
         )
-        self.comments_edit.setMaximumHeight(60)
-        form_layout.addRow("comments:", self.comments_edit)
-        
-        layout.addLayout(form_layout)
-        
-        # Separador
-        separator = QLabel()
-        separator.setStyleSheet("border-top: 1px solid #ccc; margin: 10px 0;")
-        layout.addWidget(separator)
-        
-        # Sección de análisis
-        analysis_label = QLabel("Análisis Clínico")
-        analysis_label.setStyleSheet("font-size: 11pt; font-weight: bold;")
-        layout.addWidget(analysis_label)
-        
-        analysis_form = QFormLayout()
-        
-        # Interpretación
-        self.interpretacion_edit = QTextEdit()
-        self.interpretacion_edit.setPlaceholderText(
-            "Interpretación de los resultados espirométricos:\n"
-            "- Patrones observados\n"
-            "- Valores comparados con predichos\n"
-            "- Hallazgos relevantes"
+        self.comments_edit.setMinimumHeight(120)
+        self.comments_edit.setStyleSheet(
+            "QTextEdit {"
+            "    border: 2px solid #e5e7eb; "
+            "    border-radius: 8px; "
+            "    padding: 10px; "
+            "    font-size: 10pt;"
+            "}"
+            "QTextEdit:focus {"
+            "    border: 2px solid #7c3aed;"
+            "}"
         )
-        self.interpretacion_edit.setMaximumHeight(80)
-        analysis_form.addRow("Interpretación:*", self.interpretacion_edit)
-        
-        # Conclusión
-        self.conclusion_edit = QTextEdit()
-        self.conclusion_edit.setPlaceholderText(
-            "Conclusión diagnóstica:\n"
-            "- Normal / Obstructivo / Restrictivo / Mixto\n"
-            "- Severidad\n"
-            "- Recomendaciones"
+        layout.addWidget(self.comments_edit)
+
+        # Espaciador
+        layout.addStretch()
+
+        # Información adicional
+        info_label = QLabel(
+            "ℹ️ Tu identidad ya está registrada con el token de autenticación"
         )
-        self.conclusion_edit.setMaximumHeight(80)
-        analysis_form.addRow("Conclusión:*", self.conclusion_edit)
-        
-        layout.addLayout(analysis_form)
-        
-        # Nota de campos obligatorios
-        required_label = QLabel("* Campos obligatorios")
-        required_label.setStyleSheet("color: red; font-style: italic; font-size: 9pt;")
-        layout.addWidget(required_label)
-        
-        # Información del dispositivo
-        device_label = QLabel("Dispositivo: fisioaccess_espiro")
-        device_label.setStyleSheet("color: gray; font-style: italic;")
-        layout.addWidget(device_label)
-        
+        info_label.setStyleSheet(
+            "background-color: #f9fafb; "
+            "border: 1px solid #d1d5db; "
+            "border-radius: 6px; "
+            "padding: 8px; "
+            "color: #6b7280; "
+            "font-size: 9pt;"
+        )
+        layout.addWidget(info_label)
+
         # Botones
         button_layout = QHBoxLayout()
-        button_layout.addStretch()
-        
-        self.cancel_button = QPushButton("Cancelar")
+        button_layout.setSpacing(10)
+
+        self.cancel_button = QPushButton("✕ Cancelar")
+        self.cancel_button.setStyleSheet(
+            "QPushButton {"
+            "    background-color: #e5e7eb; "
+            "    color: #374151; "
+            "    border: none; "
+            "    padding: 10px 20px; "
+            "    border-radius: 6px; "
+            "    font-weight: bold;"
+            "}"
+            "QPushButton:hover {"
+            "    background-color: #d1d5db;"
+            "}"
+        )
         self.cancel_button.clicked.connect(self.reject)
         button_layout.addWidget(self.cancel_button)
-        
-        self.save_button = QPushButton("Guardar")
+
+        self.save_button = QPushButton("✓ Guardar y Subir")
+        self.save_button.setStyleSheet(
+            "QPushButton {"
+            "    background-color: #7c3aed; "
+            "    color: white; "
+            "    border: none; "
+            "    padding: 10px 20px; "
+            "    border-radius: 6px; "
+            "    font-weight: bold;"
+            "}"
+            "QPushButton:hover {"
+            "    background-color: #6d28d9;"
+            "}"
+            "QPushButton:pressed {"
+            "    background-color: #5b21b6;"
+            "}"
+        )
         self.save_button.setDefault(True)
         self.save_button.clicked.connect(self.accept_data)
         button_layout.addWidget(self.save_button)
-        
+
         layout.addLayout(button_layout)
-        
-        # Calcular edad inicial
-        self.calcular_edad()
     
-    def calcular_edad(self):
-        """Calcular edad a partir de fecha de nacimiento"""
-        fecha_nac = self.fecha_nacimiento.date()
-        fecha_actual = QDate.currentDate()
-        
-        edad = fecha_nac.daysTo(fecha_actual) // 365
-        self.edad_spin.setValue(edad)
-        
     def accept_data(self):
-        """Validar y aceptar los datos ingresados"""
-        # Resetear estilos
-        self.nombre_edit.setStyleSheet("")
-        self.rut_edit.setStyleSheet("")
-        self.estatura_spin.setStyleSheet("")
-        self.peso_spin.setStyleSheet("")
-        self.interpretacion_edit.setStyleSheet("")
-        self.conclusion_edit.setStyleSheet("")
-        
-        # Validar campos obligatorios
-        nombre = self.nombre_edit.text().strip()
-        rut = self.rut_edit.text().strip()
-        interpretacion = self.interpretacion_edit.toPlainText().strip()
-        conclusion = self.conclusion_edit.toPlainText().strip()
-        
-        errors = []
-        
-        if not nombre:
-            self.nombre_edit.setStyleSheet("border: 2px solid red;")
-            errors.append("Nombre")
-        
-        if not rut:
-            self.rut_edit.setStyleSheet("border: 2px solid red;")
-            errors.append("RUT")
-        
-        if not interpretacion:
-            self.interpretacion_edit.setStyleSheet("border: 2px solid red;")
-            errors.append("Interpretación")
-        
-        if not conclusion:
-            self.conclusion_edit.setStyleSheet("border: 2px solid red;")
-            errors.append("Conclusión")
-        
-        if errors:
-            if not nombre:
-                self.nombre_edit.setFocus()
-            elif not rut:
-                self.rut_edit.setFocus()
-            elif not interpretacion:
-                self.interpretacion_edit.setFocus()
-            else:
-                self.conclusion_edit.setFocus()
-            return
-        
-        # Construir diccionario de datos
+        """Aceptar los datos ingresados (solo comentarios opcionales)"""
+        # Construir diccionario de datos simplificado
         self.patient_data = {
-            'nombre': nombre,
-            'rut': rut,
-            'sexo': self.sexo_combo.currentText(),
-            'fecha_nacimiento': self.fecha_nacimiento.date().toString("dd/MM/yyyy"),
-            'edad': self.edad_spin.value(),
-            'etnia': self.etnia_combo.currentText(),
-            'estatura_cm': self.estatura_spin.value(),
-            'peso_kg': self.peso_spin.value(),
-            'comments': self.comments_edit.toPlainText().strip(),
-            'interpretacion': interpretacion,
-            'conclusion': conclusion,
-            'dispositivo': 'fisioaccess_espiro'
+            'comments': self.comments_edit.toPlainText().strip()
         }
-        
+
         self.accept()
         
     def get_data(self):
