@@ -13,9 +13,22 @@ if (!verificarRol('profesor')) {
 }
 
 $rut = $_SESSION['rut'];
-$actividad_id = $_GET['actividad'] ?? '';
+
+// Sanitizar y validar actividad_id
+$actividad_id = sanitizarString($_GET['actividad'] ?? '', ['max_length' => 50]);
 
 if (empty($actividad_id)) {
+    header('Location: actividades.php');
+    exit;
+}
+
+// Prevenir path traversal
+if (preg_match('/[\.\/\\\\]/', $actividad_id)) {
+    registrarEventoSeguridad('Intento de path traversal en accesos', [
+        'actividad_id' => $actividad_id,
+        'profesor_rut' => $rut,
+        'ip' => obtenerIP()
+    ]);
     header('Location: actividades.php');
     exit;
 }
@@ -23,6 +36,11 @@ if (empty($actividad_id)) {
 // Verificar que la actividad existe y pertenece al profesor
 $actividades = cargarJSON(ACTIVIDADES_FILE);
 if (!isset($actividades[$actividad_id]) || $actividades[$actividad_id]['profesor_rut'] !== $rut) {
+    registrarEventoSeguridad('Intento de acceso no autorizado a accesos de actividad', [
+        'actividad_id' => $actividad_id,
+        'profesor_rut' => $rut,
+        'ip' => obtenerIP()
+    ]);
     header('Location: actividades.php');
     exit;
 }

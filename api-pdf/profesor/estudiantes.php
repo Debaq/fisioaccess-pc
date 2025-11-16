@@ -15,11 +15,34 @@ if (!verificarRol('profesor')) {
 $rut = $_SESSION['rut'];
 $mensaje = '';
 $tipo_mensaje = '';
-$actividad_id = $_GET['actividad'] ?? '';
+
+// Sanitizar y validar actividad_id
+$actividad_id = sanitizarString($_GET['actividad'] ?? '', ['max_length' => 50]);
+
+if (empty($actividad_id)) {
+    header('Location: actividades.php');
+    exit;
+}
+
+// Prevenir path traversal
+if (preg_match('/[\.\/\\\\]/', $actividad_id)) {
+    registrarEventoSeguridad('Intento de path traversal en estudiantes', [
+        'actividad_id' => $actividad_id,
+        'profesor_rut' => $rut,
+        'ip' => obtenerIP()
+    ]);
+    header('Location: actividades.php');
+    exit;
+}
 
 // Verificar que la actividad existe y pertenece al profesor
 $actividades = cargarJSON(ACTIVIDADES_FILE);
 if (!isset($actividades[$actividad_id]) || $actividades[$actividad_id]['profesor_rut'] !== $rut) {
+    registrarEventoSeguridad('Intento de acceso no autorizado a estudiantes de actividad', [
+        'actividad_id' => $actividad_id,
+        'profesor_rut' => $rut,
+        'ip' => obtenerIP()
+    ]);
     header('Location: actividades.php');
     exit;
 }
@@ -28,107 +51,180 @@ $actividad = $actividades[$actividad_id];
 
 // Procesar CSV
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv'])) {
-    if ($_FILES['csv']['error'] === UPLOAD_ERR_OK) {
-        $csv_path = $_FILES['csv']['tmp_name'];
-        $estudiantes_db = cargarJSON(ESTUDIANTES_FILE);
-        
-        $agregados = 0;
-        $errores = [];
-        
-        if (($handle = fopen($csv_path, 'r')) !== false) {
-            // Saltar header
-            $header = fgetcsv($handle);
-            
-            while (($data = fgetcsv($handle)) !== false) {
-                if (count($data) >= 2) {
-                    $est_rut = trim($data[0]);
-                    $est_nombre = trim($data[1]);
-                    $est_email = trim($data[2] ?? '');
-                    $est_carrera = trim($data[3] ?? '');
-                    $est_cohorte = trim($data[4] ?? '');
+    // Validar CSRF token
+    $csrf_token = $_POST['csrf_token'] ?? '';
+    if (!validarTokenCSRF($csrf_token)) {
+        $mensaje = 'Token de seguridad inválido. Intenta nuevamente.';
+        $tipo_mensaje = 'error';
+        registrarEventoSeguridad('CSRF token inválido en upload CSV estudiantes', [
+            'profesor_rut' => $rut,
+            'actividad_id' => $actividad_id,
+            'ip' => obtenerIP()
+        ]);
+    } else {
+        if ($_FILES['csv']['error'] === UPLOAD_ERR_OK) {
+            // Validar extensión y tipo
+            $csv_ext = strtolower(pathinfo($_FILES['csv']['name'], PATHINFO_EXTENSION));
+            if ($csv_ext !== 'csv') {
+                $mensaje = 'El archivo debe ser CSV';
+                $tipo_mensaje = 'error';
+            } else {
+                $csv_path = $_FILES['csv']['tmp_name'];
+                $estudiantes_db = cargarJSON(ESTUDIANTES_FILE);
+
+                $agregados = 0;
+                $errores = [];
+
+                if (($handle = fopen($csv_path, 'r')) !== false) {
+                    // Saltar header
+                    $header = fgetcsv($handle);
+
+                    while (($data = fgetcsv($handle)) !== false) {
+                        if (count($data) >= 2) {
+                            // Sanitizar datos del CSV
+                            $est_rut = sanitizarString(trim($data[0]), ['max_length' => 12]);
+                            $est_nombre = sanitizarString(trim($data[1]), ['max_length' => 200]);
+                            $est_email = sanitizarString(trim($data[2] ?? ''), ['max_length' => 255]);
+                            $est_carrera = sanitizarString(trim($data[3] ?? ''), ['max_length' => 100]);
+                            $est_cohorte = sanitizarString(trim($data[4] ?? ''), ['max_length' => 20]);
+
+                            if (empty($est_rut) || empty($est_nombre)) {
+                                continue;
+                            }
+
+                            // Validar RUT
+                            if (!validarRUT($est_rut)) {
+                                $errores[] = "RUT inválido: $est_rut";
+                                continue;
+                            }
+
+                            // Validar email si existe
+                            if (!empty($est_email) && !validarEmail($est_email)) {
+                                $errores[] = "Email inválido para $est_rut";
+                                continue;
+                            }
                     
-                    if (empty($est_rut) || empty($est_nombre)) {
-                        continue;
+                            // Crear o actualizar estudiante
+                            if (!isset($estudiantes_db[$est_rut])) {
+                                $estudiantes_db[$est_rut] = [
+                                    'rut' => $est_rut,
+                                    'nombre' => $est_nombre,
+                                    'email' => $est_email,
+                                    'carrera' => $est_carrera,
+                                    'cohorte' => $est_cohorte,
+                                    'created' => formatearFecha(),
+                                    'profesor_registro' => $rut,
+                                    'actividades' => [],
+                                    'activo' => true
+                                ];
+                            }
+
+                            // Agregar a la actividad si no está
+                            if (!in_array($actividad_id, $estudiantes_db[$est_rut]['actividades'])) {
+                                $estudiantes_db[$est_rut]['actividades'][] = $actividad_id;
+                            }
+
+                            // Agregar a la lista de inscritos de la actividad
+                            if (!in_array($est_rut, $actividades[$actividad_id]['configuracion']['estudiantes_inscritos'])) {
+                                $actividades[$actividad_id]['configuracion']['estudiantes_inscritos'][] = $est_rut;
+                                $agregados++;
+                            }
+                        }
                     }
-                    
-                    // Crear o actualizar estudiante
-                    if (!isset($estudiantes_db[$est_rut])) {
-                        $estudiantes_db[$est_rut] = [
-                            'rut' => $est_rut,
-                            'nombre' => $est_nombre,
-                            'email' => $est_email,
-                            'carrera' => $est_carrera,
-                            'cohorte' => $est_cohorte,
-                            'created' => formatearFecha(),
-                            'profesor_registro' => $rut,
-                            'actividades' => [],
-                            'activo' => true
-                        ];
+                    fclose($handle);
+
+                    // Actualizar estadísticas
+                    $actividades[$actividad_id]['estadisticas']['total_estudiantes'] = count($actividades[$actividad_id]['configuracion']['estudiantes_inscritos']);
+
+                    guardarJSON(ESTUDIANTES_FILE, $estudiantes_db);
+                    guardarJSON(ACTIVIDADES_FILE, $actividades);
+
+                    // Logging
+                    registrarLog('INFO', 'Estudiantes agregados desde CSV', [
+                        'actividad_id' => $actividad_id,
+                        'profesor_rut' => $rut,
+                        'agregados' => $agregados,
+                        'errores_count' => count($errores),
+                        'ip' => obtenerIP()
+                    ]);
+
+                    $mensaje = "Se agregaron {$agregados} estudiantes a la actividad";
+                    if (!empty($errores)) {
+                        $mensaje .= ". " . count($errores) . " errores encontrados";
                     }
-                    
-                    // Agregar a la actividad si no está
-                    if (!in_array($actividad_id, $estudiantes_db[$est_rut]['actividades'])) {
-                        $estudiantes_db[$est_rut]['actividades'][] = $actividad_id;
-                    }
-                    
-                    // Agregar a la lista de inscritos de la actividad
-                    if (!in_array($est_rut, $actividades[$actividad_id]['configuracion']['estudiantes_inscritos'])) {
-                        $actividades[$actividad_id]['configuracion']['estudiantes_inscritos'][] = $est_rut;
-                        $agregados++;
-                    }
+                    $tipo_mensaje = 'success';
+                } else {
+                    $mensaje = 'Error al leer el archivo CSV';
+                    $tipo_mensaje = 'error';
                 }
             }
-            fclose($handle);
-            
-            // Actualizar estadísticas
-            $actividades[$actividad_id]['estadisticas']['total_estudiantes'] = count($actividades[$actividad_id]['configuracion']['estudiantes_inscritos']);
-            
-            guardarJSON(ESTUDIANTES_FILE, $estudiantes_db);
-            guardarJSON(ACTIVIDADES_FILE, $actividades);
-            
-            $mensaje = "Se agregaron {$agregados} estudiantes a la actividad";
-            $tipo_mensaje = 'success';
         } else {
-            $mensaje = 'Error al leer el archivo CSV';
+            $mensaje = 'Error al subir el archivo';
             $tipo_mensaje = 'error';
         }
-    } else {
-        $mensaje = 'Error al subir el archivo';
-        $tipo_mensaje = 'error';
     }
 }
 
 // Eliminar estudiante de la actividad
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['eliminar_estudiante'])) {
-    $est_rut = $_POST['estudiante_rut'];
-    $estudiantes_db = cargarJSON(ESTUDIANTES_FILE);
-    
-    // Remover de la actividad
-    $actividades[$actividad_id]['configuracion']['estudiantes_inscritos'] = array_values(
-        array_filter(
-            $actividades[$actividad_id]['configuracion']['estudiantes_inscritos'],
-            fn($r) => $r !== $est_rut
-        )
-    );
-    
-    // Remover actividad del estudiante
-    if (isset($estudiantes_db[$est_rut])) {
-        $estudiantes_db[$est_rut]['actividades'] = array_values(
-            array_filter(
-                $estudiantes_db[$est_rut]['actividades'],
-                fn($a) => $a !== $actividad_id
-            )
-        );
+    // Validar CSRF token
+    $csrf_token = $_POST['csrf_token'] ?? '';
+    if (!validarTokenCSRF($csrf_token)) {
+        $mensaje = 'Token de seguridad inválido. Intenta nuevamente.';
+        $tipo_mensaje = 'error';
+        registrarEventoSeguridad('CSRF token inválido en eliminar estudiante', [
+            'profesor_rut' => $rut,
+            'actividad_id' => $actividad_id,
+            'ip' => obtenerIP()
+        ]);
+    } else {
+        // Sanitizar y validar RUT
+        $est_rut = sanitizarString($_POST['estudiante_rut'] ?? '', ['max_length' => 12]);
+
+        if (!validarRUT($est_rut)) {
+            $mensaje = 'RUT de estudiante inválido';
+            $tipo_mensaje = 'error';
+        } else {
+            $estudiantes_db = cargarJSON(ESTUDIANTES_FILE);
+            $nombre_estudiante = $estudiantes_db[$est_rut]['nombre'] ?? 'Desconocido';
+
+            // Remover de la actividad
+            $actividades[$actividad_id]['configuracion']['estudiantes_inscritos'] = array_values(
+                array_filter(
+                    $actividades[$actividad_id]['configuracion']['estudiantes_inscritos'],
+                    fn($r) => $r !== $est_rut
+                )
+            );
+
+            // Remover actividad del estudiante
+            if (isset($estudiantes_db[$est_rut])) {
+                $estudiantes_db[$est_rut]['actividades'] = array_values(
+                    array_filter(
+                        $estudiantes_db[$est_rut]['actividades'],
+                        fn($a) => $a !== $actividad_id
+                    )
+                );
+            }
+
+            // Actualizar estadísticas
+            $actividades[$actividad_id]['estadisticas']['total_estudiantes'] = count($actividades[$actividad_id]['configuracion']['estudiantes_inscritos']);
+
+            guardarJSON(ESTUDIANTES_FILE, $estudiantes_db);
+            guardarJSON(ACTIVIDADES_FILE, $actividades);
+
+            // Logging
+            registrarLog('INFO', 'Estudiante eliminado de actividad', [
+                'actividad_id' => $actividad_id,
+                'profesor_rut' => $rut,
+                'estudiante_rut' => $est_rut,
+                'estudiante_nombre' => $nombre_estudiante,
+                'ip' => obtenerIP()
+            ]);
+
+            $mensaje = 'Estudiante eliminado de la actividad';
+            $tipo_mensaje = 'success';
+        }
     }
-    
-    // Actualizar estadísticas
-    $actividades[$actividad_id]['estadisticas']['total_estudiantes'] = count($actividades[$actividad_id]['configuracion']['estudiantes_inscritos']);
-    
-    guardarJSON(ESTUDIANTES_FILE, $estudiantes_db);
-    guardarJSON(ACTIVIDADES_FILE, $actividades);
-    
-    $mensaje = 'Estudiante eliminado de la actividad';
-    $tipo_mensaje = 'success';
 }
 
 // Recargar actividad
@@ -399,6 +495,7 @@ rut,nombre,email,carrera,cohorte<br>
             </div>
             
             <form method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="<?= generarTokenCSRF() ?>">
                 <div class="upload-area">
                     <div class="upload-icon">📄</div>
                     <p style="margin-bottom: 15px;">Selecciona un archivo CSV con la lista de estudiantes</p>
@@ -436,6 +533,7 @@ rut,nombre,email,carrera,cohorte<br>
                                 </div>
                             </div>
                             <form method="POST" style="display: inline;" onsubmit="return confirm('¿Eliminar estudiante de esta actividad?')">
+                                <input type="hidden" name="csrf_token" value="<?= generarTokenCSRF() ?>">
                                 <input type="hidden" name="eliminar_estudiante" value="1">
                                 <input type="hidden" name="estudiante_rut" value="<?= $est['rut'] ?>">
                                 <button type="submit" class="btn btn-danger btn-small">🗑️ Eliminar</button>
