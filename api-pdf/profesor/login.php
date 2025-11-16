@@ -16,12 +16,17 @@ if (verificarRol('profesor')) {
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $rut = trim($_POST['rut'] ?? '');
-    $password = $_POST['password'] ?? '';
-    
-    if (empty($rut) || empty($password)) {
-        $error = 'Por favor complete todos los campos';
+    // Validar token CSRF
+    $csrf_token = $_POST['csrf_token'] ?? '';
+    if (!validarTokenCSRF($csrf_token)) {
+        $error = 'Token de seguridad inválido. Recarga la página e intenta nuevamente.';
     } else {
+        $rut = trim($_POST['rut'] ?? '');
+        $password = $_POST['password'] ?? '';
+
+        if (empty($rut) || empty($password)) {
+            $error = 'Por favor complete todos los campos';
+        } else {
         $profesores = cargarJSON(PROFESORES_FILE);
         
         if (isset($profesores[$rut])) {
@@ -30,18 +35,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$profesor['activo']) {
                 $error = 'Usuario desactivado. Contacte al administrador';
             } elseif (password_verify($password, $profesor['password_hash'])) {
-                // Login exitoso
+                // Login exitoso - regenerar sesión para prevenir session fixation
+                session_regenerate_id(true);
                 $_SESSION['authenticated'] = true;
                 $_SESSION['rol'] = 'profesor';
                 $_SESSION['rut'] = $rut;
                 $_SESSION['nombre'] = $profesor['nombre'];
                 $_SESSION['email'] = $profesor['email'];
                 $_SESSION['login_time'] = time();
-                
+
                 // Actualizar último login
                 $profesores[$rut]['last_login'] = formatearFecha();
                 guardarJSON(PROFESORES_FILE, $profesores);
-                
+
                 header('Location: dashboard.php');
                 exit;
             } else {
@@ -50,8 +56,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $error = 'RUT no registrado';
         }
+        }
     }
 }
+
+// Generar token CSRF para el formulario
+$csrf_token = generarTokenCSRF();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -195,16 +205,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php endif; ?>
         
         <form method="POST">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
+
             <div class="form-group">
                 <label>RUT</label>
                 <input type="text" name="rut" placeholder="12345678-9" required autofocus>
             </div>
-            
+
             <div class="form-group">
                 <label>Contraseña</label>
                 <input type="password" name="password" required>
             </div>
-            
+
             <button type="submit" class="btn">Ingresar</button>
         </form>
         

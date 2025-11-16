@@ -11,10 +11,64 @@ define('BASE_PATH', __DIR__);
 define('DATA_PATH', BASE_PATH . '/data');
 define('UPLOADS_PATH', DATA_PATH . '/uploads');
 
-// ⬇️ AHORA SÍ cargar PHPMailer (DESPUÉS de BASE_PATH)
-require_once BASE_PATH . '/lib/PHPMailer/src/Exception.php';
-require_once BASE_PATH . '/lib/PHPMailer/src/PHPMailer.php';
-require_once BASE_PATH . '/lib/PHPMailer/src/SMTP.php';
+// Cargar variables de entorno desde .env
+function cargarEnv($archivo = null) {
+    if ($archivo === null) {
+        $archivo = BASE_PATH . '/.env';
+    }
+
+    if (!file_exists($archivo)) {
+        return;
+    }
+
+    $lineas = file($archivo, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lineas as $linea) {
+        // Ignorar comentarios
+        if (strpos(trim($linea), '#') === 0) {
+            continue;
+        }
+
+        // Parsear línea
+        if (strpos($linea, '=') !== false) {
+            list($nombre, $valor) = explode('=', $linea, 2);
+            $nombre = trim($nombre);
+            $valor = trim($valor);
+
+            // Establecer variable de entorno si no existe
+            if (!getenv($nombre)) {
+                putenv("$nombre=$valor");
+                $_ENV[$nombre] = $valor;
+            }
+        }
+    }
+}
+
+// Función auxiliar para obtener variable de entorno con fallback
+function env($nombre, $default = null) {
+    $valor = getenv($nombre);
+    if ($valor === false) {
+        return $default;
+    }
+
+    // Convertir strings especiales
+    $lower = strtolower($valor);
+    if ($lower === 'true') return true;
+    if ($lower === 'false') return false;
+    if ($lower === 'null') return null;
+
+    return $valor;
+}
+
+// Cargar .env
+cargarEnv();
+
+// ⬇️ Cargar PHPMailer si está disponible (DESPUÉS de BASE_PATH)
+// Si PHPMailer no está instalado, se usará mail() nativo de PHP
+if (file_exists(BASE_PATH . '/lib/PHPMailer/src/PHPMailer.php')) {
+    require_once BASE_PATH . '/lib/PHPMailer/src/Exception.php';
+    require_once BASE_PATH . '/lib/PHPMailer/src/PHPMailer.php';
+    require_once BASE_PATH . '/lib/PHPMailer/src/SMTP.php';
+}
 
 // Archivos de datos
 define('CONFIG_FILE', DATA_PATH . '/config.json');
@@ -34,6 +88,7 @@ define('CODIGOS_VERIFICACION_FILE', DATA_PATH . '/codigos_verificacion.json');
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
 ini_set('session.cookie_secure', 0); // Cambiar a 1 si usas HTTPS
+ini_set('session.cookie_samesite', 'Strict'); // Protección CSRF
 
 // Timeout de sesión (2 horas)
 define('SESSION_TIMEOUT', 7200);
@@ -49,13 +104,17 @@ define('PDF_MAX_SIZE', 10 * 1024 * 1024); // 10MB
 define('RAW_MAX_SIZE', 5 * 1024 * 1024);  // 5MB
 
 
-// Configuración de email
-define('SMTP_HOST', 'mail.tmeduca.org');
-define('SMTP_PORT', 465);  // SSL
-define('SMTP_FROM', 'fisioaccess@tmeduca.org');
-define('SMTP_FROM_NAME', 'FisioaccessPC');
-define('SMTP_USER', 'fisioaccess@tmeduca.org');
-define('SMTP_PASS', '@WYeLs[)hh.?W;Ej');
+// Configuración de email (desde .env)
+define('SMTP_HOST', env('SMTP_HOST', 'mail.tmeduca.org'));
+define('SMTP_PORT', env('SMTP_PORT', 465));  // SSL
+define('SMTP_FROM', env('SMTP_FROM', 'fisioaccess@tmeduca.org'));
+define('SMTP_FROM_NAME', env('SMTP_FROM_NAME', 'FisioaccessPC'));
+define('SMTP_USER', env('SMTP_USER', 'fisioaccess@tmeduca.org'));
+define('SMTP_PASS', env('SMTP_PASS', ''));  // ⚠️ Nunca hardcodear contraseñas
+
+// Configuración de seguridad CORS
+define('ALLOWED_ORIGINS', array_filter(array_map('trim', explode(',', env('ALLOWED_ORIGINS', '*')))));
+define('DEBUG_MODE', env('DEBUG_MODE', false));
 
 // Tipos de estudio
 define('TIPOS_ESTUDIO', [
@@ -89,21 +148,70 @@ function guardarJSON($archivo, $datos) {
     return file_put_contents($archivo, json_encode($datos, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 }
 
+/**
+ * Validar y establecer headers CORS de forma segura
+ */
+function configurarCORS() {
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+
+    // Si ALLOWED_ORIGINS contiene '*', permitir todos
+    if (in_array('*', ALLOWED_ORIGINS)) {
+        header('Access-Control-Allow-Origin: *');
+    } elseif (in_array($origin, ALLOWED_ORIGINS)) {
+        header("Access-Control-Allow-Origin: $origin");
+        header('Vary: Origin');
+    }
+
+    header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, X-CSRF-Token');
+    header('Access-Control-Allow-Credentials: true');
+}
+
+/**
+ * Generar token CSRF
+ */
+function generarTokenCSRF() {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+
+    if (!isset($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+
+    return $_SESSION['csrf_token'];
+}
+
+/**
+ * Validar token CSRF
+ */
+function validarTokenCSRF($token) {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+
+    if (!isset($_SESSION['csrf_token'])) {
+        return false;
+    }
+
+    return hash_equals($_SESSION['csrf_token'], $token);
+}
+
 function verificarSesion() {
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
     }
-    
+
     if (!isset($_SESSION['authenticated']) || !$_SESSION['authenticated']) {
         return false;
     }
-    
+
     // Verificar timeout
     if (time() - ($_SESSION['login_time'] ?? 0) > SESSION_TIMEOUT) {
         session_destroy();
         return false;
     }
-    
+
     return true;
 }
 
@@ -118,6 +226,17 @@ function verificarRol($rol_requerido) {
 function responderJSON($datos, $codigo = 200) {
     http_response_code($codigo);
     header('Content-Type: application/json; charset=utf-8');
+
+    // Si hay error y DEBUG_MODE está desactivado, sanitizar mensaje
+    if (!DEBUG_MODE && isset($datos['error']) && $codigo >= 500) {
+        $datos['error'] = 'Error interno del servidor. Contacte al administrador.';
+        // Log del error real en servidor
+        if (isset($datos['error_detail'])) {
+            error_log("ERROR: " . $datos['error_detail']);
+            unset($datos['error_detail']);
+        }
+    }
+
     echo json_encode($datos, JSON_UNESCAPED_UNICODE);
     exit;
 }
