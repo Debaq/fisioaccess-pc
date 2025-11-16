@@ -18,149 +18,262 @@ $tipo_mensaje = '';
 
 // Procesar acciones
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? '';
+    // Validar CSRF token
+    $csrf_token = $_POST['csrf_token'] ?? '';
+    if (!validarTokenCSRF($csrf_token)) {
+        $mensaje = 'Token de seguridad inválido. Intenta nuevamente.';
+        $tipo_mensaje = 'error';
+        registrarEventoSeguridad('CSRF token inválido en actividades', [
+            'profesor_rut' => $rut,
+            'ip' => obtenerIP()
+        ]);
+    } else {
+        $action = sanitizarString($_POST['action'] ?? '', ['max_length' => 20]);
 
-    $actividades = cargarJSON(ACTIVIDADES_FILE);
-    $profesores = cargarJSON(PROFESORES_FILE);
-    $profesor = $profesores[$rut];
+        $actividades = cargarJSON(ACTIVIDADES_FILE);
+        $profesores = cargarJSON(PROFESORES_FILE);
+        $profesor = $profesores[$rut];
 
-    if ($action === 'crear') {
-        // Verificar cuota
-        if ($profesor['actividades_usadas'] >= $profesor['cuota_actividades']) {
-            $mensaje = 'Has alcanzado tu cuota máxima de actividades';
-            $tipo_mensaje = 'error';
-        } else {
-            $id = generarID('ACT');
-            $config = cargarJSON(CONFIG_FILE);
+        if ($action === 'crear') {
+            // Verificar cuota
+            if ($profesor['actividades_usadas'] >= $profesor['cuota_actividades']) {
+                $mensaje = 'Has alcanzado tu cuota máxima de actividades';
+                $tipo_mensaje = 'error';
+            } else {
+                // Sanitizar y validar inputs
+                $nombre = sanitizarString($_POST['nombre'] ?? '', ['max_length' => 200]);
+                $tipo_estudio = sanitizarString($_POST['tipo_estudio'] ?? '', ['max_length' => 50]);
+                $tipo_sesion = sanitizarString($_POST['tipo_sesion'] ?? 'real', ['max_length' => 20]);
+                $descripcion = sanitizarString($_POST['descripcion'] ?? '', ['max_length' => 2000]);
+                $fecha_inicio = sanitizarString($_POST['fecha_inicio'] ?? '', ['max_length' => 20]);
+                $fecha_cierre = sanitizarString($_POST['fecha_cierre'] ?? '', ['max_length' => 20]);
+                $objetivos = sanitizarString($_POST['objetivos'] ?? '', ['max_length' => 5000]);
+                $protocolo = sanitizarString($_POST['protocolo'] ?? '', ['max_length' => 5000]);
+                $criterios_analisis = sanitizarString($_POST['criterios_analisis'] ?? '', ['max_length' => 5000]);
+                $password = $_POST['password'] ?? '';
+                $dominio_email = sanitizarString($_POST['dominio_email'] ?? '@uach.cl', ['max_length' => 100]);
 
-            $actividades[$id] = [
-                'id' => $id,
-                'profesor_rut' => $rut,
-                'info_basica' => [
-                    'nombre' => trim($_POST['nombre']),
-                    'tipo_estudio' => $_POST['tipo_estudio'],
-                    'tipo_sesion' => $_POST['tipo_sesion'] ?? 'real',
-                    'descripcion' => trim($_POST['descripcion']),
-                    'fecha_inicio' => $_POST['fecha_inicio'],
-                    'fecha_cierre' => $_POST['fecha_cierre'],
-                    'created' => formatearFecha()
-                ],
-                'material_pedagogico' => [
-                    'objetivos' => array_filter(array_map('trim', explode("\n", $_POST['objetivos'] ?? ''))),
-                    'protocolo' => trim($_POST['protocolo'] ?? ''),
-                    'guia_laboratorio' => null,
-                    'material_complementario' => [],
-                    'criterios_analisis' => trim($_POST['criterios_analisis'] ?? '')
-                ],
-                'evaluacion' => [
-                    'es_calificada' => isset($_POST['es_calificada']),
-                    'permite_retroalimentacion' => isset($_POST['permite_retroalimentacion']),
-                    'ponderacion' => floatval($_POST['ponderacion'] ?? 0),
-                    'escala' => $_POST['escala'] ?? '1.0-7.0',
-                    'rubrica' => null,
-                    'criterios' => []
-                ],
-                'configuracion' => [
-                    'cuota_estudios' => [
-                        'espirometria' => intval($_POST['cuota_espirometria'] ?? $config['cuotas_default']['estudios_por_tipo']),
-                        'ecg' => intval($_POST['cuota_ecg'] ?? $config['cuotas_default']['estudios_por_tipo']),
-                        'emg' => intval($_POST['cuota_emg'] ?? $config['cuotas_default']['estudios_por_tipo']),
-                        'eeg' => intval($_POST['cuota_eeg'] ?? $config['cuotas_default']['estudios_por_tipo'])
-                    ],
-                    'permite_reentregas' => isset($_POST['permite_reentregas']),
-                    'visibilidad' => $_POST['visibilidad'] ?? 'privada',
-                    'password_hash' => password_hash($_POST['password'], PASSWORD_DEFAULT),
-                    'estudiantes_inscritos' => []
-                ],
-                'estadisticas' => [
-                    'total_estudiantes' => 0,
-                    'entregas_realizadas' => 0,
-                    'entregas_pendientes' => 0,
-                    'entregas_revisadas' => 0,
-                    'promedio_nota' => 0
-                ],
-                'accesos' => [
-                    'token_actividad' => generarToken(12),
-                    'url_base' => 'https://tmeduca.org/fisioaccess', // ⬇️ ACA TMEDUCA ⬇️
-                    'link_directo' => '',
-                    'html_embed' => '',
-                    'modo_registro' => isset($_POST['modo_registro']) ? $_POST['modo_registro'] : 'cerrado',
-                    'dominio_email' => trim($_POST['dominio_email'] ?? '@uach.cl'),
-                    'estudiantes_registrados' => [],
-                    'fecha_generacion' => formatearFecha()
-                ]
-            ];
+                // Validaciones
+                $tipos_validos = ['espirometria', 'ecg', 'emg', 'eeg'];
+                if (validarNoVacio($nombre) !== true) {
+                    $mensaje = 'El nombre es requerido';
+                    $tipo_mensaje = 'error';
+                } elseif (!in_array($tipo_estudio, $tipos_validos)) {
+                    $mensaje = 'Tipo de estudio inválido';
+                    $tipo_mensaje = 'error';
+                } elseif (validarNoVacio($descripcion) !== true) {
+                    $mensaje = 'La descripción es requerida';
+                    $tipo_mensaje = 'error';
+                } elseif (validarNoVacio($password) !== true || !validarLongitud($password, 6, 100)) {
+                    $mensaje = 'La contraseña debe tener al menos 6 caracteres';
+                    $tipo_mensaje = 'error';
+                } else {
+                    $id = generarID('ACT');
+                    $config = cargarJSON(CONFIG_FILE);
 
-            guardarJSON(ACTIVIDADES_FILE, $actividades);
-            // ⬇️ AGREGAR ESTAS LÍNEAS ⬇️
-            // Generar accesos automáticamente
-            $token = $actividades[$id]['accesos']['token_actividad'];
-            $url_base = $actividades[$id]['accesos']['url_base'];
-            $actividades[$id]['accesos']['link_directo'] = $url_base . '/estudiante/acceso.php?token=' . $token;
+                    $actividades[$id] = [
+                        'id' => $id,
+                        'profesor_rut' => $rut,
+                        'info_basica' => [
+                            'nombre' => $nombre,
+                            'tipo_estudio' => $tipo_estudio,
+                            'tipo_sesion' => $tipo_sesion,
+                            'descripcion' => $descripcion,
+                            'fecha_inicio' => $fecha_inicio,
+                            'fecha_cierre' => $fecha_cierre,
+                            'created' => formatearFecha()
+                        ],
+                        'material_pedagogico' => [
+                            'objetivos' => array_filter(array_map('trim', explode("\n", $objetivos))),
+                            'protocolo' => $protocolo,
+                            'guia_laboratorio' => null,
+                            'material_complementario' => [],
+                            'criterios_analisis' => $criterios_analisis
+                        ],
+                        'evaluacion' => [
+                            'es_calificada' => isset($_POST['es_calificada']),
+                            'permite_retroalimentacion' => isset($_POST['permite_retroalimentacion']),
+                            'ponderacion' => max(0, min(100, floatval($_POST['ponderacion'] ?? 0))),
+                            'escala' => sanitizarString($_POST['escala'] ?? '1.0-7.0', ['max_length' => 20]),
+                            'rubrica' => null,
+                            'criterios' => []
+                        ],
+                        'configuracion' => [
+                            'cuota_estudios' => [
+                                'espirometria' => max(1, min(10, intval($_POST['cuota_espirometria'] ?? $config['cuotas_default']['estudios_por_tipo']))),
+                                'ecg' => max(1, min(10, intval($_POST['cuota_ecg'] ?? $config['cuotas_default']['estudios_por_tipo']))),
+                                'emg' => max(1, min(10, intval($_POST['cuota_emg'] ?? $config['cuotas_default']['estudios_por_tipo']))),
+                                'eeg' => max(1, min(10, intval($_POST['cuota_eeg'] ?? $config['cuotas_default']['estudios_por_tipo'])))
+                            ],
+                            'permite_reentregas' => isset($_POST['permite_reentregas']),
+                            'visibilidad' => sanitizarString($_POST['visibilidad'] ?? 'privada', ['max_length' => 20]),
+                            'password_hash' => password_hash($password, PASSWORD_DEFAULT),
+                            'estudiantes_inscritos' => []
+                        ],
+                        'estadisticas' => [
+                            'total_estudiantes' => 0,
+                            'entregas_realizadas' => 0,
+                            'entregas_pendientes' => 0,
+                            'entregas_revisadas' => 0,
+                            'promedio_nota' => 0
+                        ],
+                        'accesos' => [
+                            'token_actividad' => generarToken(12),
+                            'url_base' => 'https://tmeduca.org/fisioaccess',
+                            'link_directo' => '',
+                            'html_embed' => '',
+                            'modo_registro' => sanitizarString($_POST['modo_registro'] ?? 'cerrado', ['max_length' => 20]),
+                            'dominio_email' => $dominio_email,
+                            'estudiantes_registrados' => [],
+                            'fecha_generacion' => formatearFecha()
+                        ]
+                    ];
 
-            // Generar HTML embebido
-            $html_embed = generarHTMLEmbebido($actividades[$id]);
-            $actividades[$id]['accesos']['html_embed'] = $html_embed;
+                    guardarJSON(ACTIVIDADES_FILE, $actividades);
 
-            // Guardar nuevamente con los accesos generados
-            guardarJSON(ACTIVIDADES_FILE, $actividades);
+                    // Generar accesos automáticamente
+                    $token = $actividades[$id]['accesos']['token_actividad'];
+                    $url_base = $actividades[$id]['accesos']['url_base'];
+                    $actividades[$id]['accesos']['link_directo'] = $url_base . '/estudiante/acceso.php?token=' . $token;
 
-            // Actualizar cuota del profesor
-            $profesores[$rut]['actividades_usadas']++;
-            guardarJSON(PROFESORES_FILE, $profesores);
+                    // Generar HTML embebido
+                    $html_embed = generarHTMLEmbebido($actividades[$id]);
+                    $actividades[$id]['accesos']['html_embed'] = $html_embed;
 
-            // Crear carpeta para materiales y entregas
-            $actividad_dir = UPLOADS_PATH . '/' . $id;
-            mkdir($actividad_dir . '/materiales', 0755, true);
-            mkdir($actividad_dir . '/entregas', 0755, true);
+                    // Guardar nuevamente con los accesos generados
+                    guardarJSON(ACTIVIDADES_FILE, $actividades);
 
-            $mensaje = 'Actividad creada exitosamente';
-            $tipo_mensaje = 'success';
-        }
-    }
+                    // Actualizar cuota del profesor
+                    $profesores[$rut]['actividades_usadas']++;
+                    guardarJSON(PROFESORES_FILE, $profesores);
 
-    elseif ($action === 'editar') {
-        $id = $_POST['id'];
+                    // Crear carpeta para materiales y entregas
+                    $actividad_dir = UPLOADS_PATH . '/' . $id;
+                    mkdir($actividad_dir . '/materiales', 0755, true);
+                    mkdir($actividad_dir . '/entregas', 0755, true);
 
-        if (isset($actividades[$id]) && $actividades[$id]['profesor_rut'] === $rut) {
-            $actividades[$id]['info_basica']['nombre'] = trim($_POST['nombre']);
-            $actividades[$id]['info_basica']['descripcion'] = trim($_POST['descripcion']);
-            $actividades[$id]['info_basica']['fecha_cierre'] = $_POST['fecha_cierre'];
+                    // Logging
+                    registrarLog('INFO', 'Actividad creada', [
+                        'actividad_id' => $id,
+                        'profesor_rut' => $rut,
+                        'nombre' => $nombre,
+                        'tipo_estudio' => $tipo_estudio,
+                        'ip' => obtenerIP()
+                    ]);
 
-            $actividades[$id]['material_pedagogico']['objetivos'] = array_filter(array_map('trim', explode("\n", $_POST['objetivos'] ?? '')));
-            $actividades[$id]['material_pedagogico']['protocolo'] = trim($_POST['protocolo'] ?? '');
-            $actividades[$id]['material_pedagogico']['criterios_analisis'] = trim($_POST['criterios_analisis'] ?? '');
-
-            $actividades[$id]['evaluacion']['es_calificada'] = isset($_POST['es_calificada']);
-            $actividades[$id]['evaluacion']['permite_retroalimentacion'] = isset($_POST['permite_retroalimentacion']);
-            $actividades[$id]['evaluacion']['ponderacion'] = floatval($_POST['ponderacion'] ?? 0);
-
-            $actividades[$id]['configuracion']['permite_reentregas'] = isset($_POST['permite_reentregas']);
-
-            if (!empty($_POST['password'])) {
-                $actividades[$id]['configuracion']['password_hash'] = password_hash($_POST['password'], PASSWORD_DEFAULT);
+                    $mensaje = 'Actividad creada exitosamente';
+                    $tipo_mensaje = 'success';
+                }
             }
-
-            guardarJSON(ACTIVIDADES_FILE, $actividades);
-
-            $mensaje = 'Actividad actualizada exitosamente';
-            $tipo_mensaje = 'success';
         }
-    }
 
-    elseif ($action === 'eliminar') {
-        $id = $_POST['id'];
+        elseif ($action === 'editar') {
+            $id = sanitizarString($_POST['id'] ?? '', ['max_length' => 50]);
 
-        if (isset($actividades[$id]) && $actividades[$id]['profesor_rut'] === $rut) {
-            unset($actividades[$id]);
-            guardarJSON(ACTIVIDADES_FILE, $actividades);
+            // Prevenir path traversal
+            if (preg_match('/[\.\/\\\\]/', $id)) {
+                registrarEventoSeguridad('Intento de path traversal en editar actividad', [
+                    'actividad_id' => $id,
+                    'profesor_rut' => $rut,
+                    'ip' => obtenerIP()
+                ]);
+                $mensaje = 'ID de actividad inválido';
+                $tipo_mensaje = 'error';
+            } elseif (isset($actividades[$id]) && $actividades[$id]['profesor_rut'] === $rut) {
+                // Sanitizar inputs
+                $nombre = sanitizarString($_POST['nombre'] ?? '', ['max_length' => 200]);
+                $descripcion = sanitizarString($_POST['descripcion'] ?? '', ['max_length' => 2000]);
+                $fecha_cierre = sanitizarString($_POST['fecha_cierre'] ?? '', ['max_length' => 20]);
+                $objetivos = sanitizarString($_POST['objetivos'] ?? '', ['max_length' => 5000]);
+                $protocolo = sanitizarString($_POST['protocolo'] ?? '', ['max_length' => 5000]);
+                $criterios_analisis = sanitizarString($_POST['criterios_analisis'] ?? '', ['max_length' => 5000]);
+                $password = $_POST['password'] ?? '';
 
-            // Reducir cuota usada
-            $profesores[$rut]['actividades_usadas']--;
-            guardarJSON(PROFESORES_FILE, $profesores);
+                // Validaciones
+                if (validarNoVacio($nombre) !== true) {
+                    $mensaje = 'El nombre es requerido';
+                    $tipo_mensaje = 'error';
+                } elseif (validarNoVacio($descripcion) !== true) {
+                    $mensaje = 'La descripción es requerida';
+                    $tipo_mensaje = 'error';
+                } elseif (!empty($password) && !validarLongitud($password, 6, 100)) {
+                    $mensaje = 'La contraseña debe tener al menos 6 caracteres';
+                    $tipo_mensaje = 'error';
+                } else {
+                    $actividades[$id]['info_basica']['nombre'] = $nombre;
+                    $actividades[$id]['info_basica']['descripcion'] = $descripcion;
+                    $actividades[$id]['info_basica']['fecha_cierre'] = $fecha_cierre;
 
-            $mensaje = 'Actividad eliminada exitosamente';
-            $tipo_mensaje = 'success';
+                    $actividades[$id]['material_pedagogico']['objetivos'] = array_filter(array_map('trim', explode("\n", $objetivos)));
+                    $actividades[$id]['material_pedagogico']['protocolo'] = $protocolo;
+                    $actividades[$id]['material_pedagogico']['criterios_analisis'] = $criterios_analisis;
+
+                    $actividades[$id]['evaluacion']['es_calificada'] = isset($_POST['es_calificada']);
+                    $actividades[$id]['evaluacion']['permite_retroalimentacion'] = isset($_POST['permite_retroalimentacion']);
+                    $actividades[$id]['evaluacion']['ponderacion'] = max(0, min(100, floatval($_POST['ponderacion'] ?? 0)));
+
+                    $actividades[$id]['configuracion']['permite_reentregas'] = isset($_POST['permite_reentregas']);
+
+                    if (!empty($password)) {
+                        $actividades[$id]['configuracion']['password_hash'] = password_hash($password, PASSWORD_DEFAULT);
+                    }
+
+                    guardarJSON(ACTIVIDADES_FILE, $actividades);
+
+                    // Logging
+                    registrarLog('INFO', 'Actividad editada', [
+                        'actividad_id' => $id,
+                        'profesor_rut' => $rut,
+                        'nombre' => $nombre,
+                        'password_changed' => !empty($password),
+                        'ip' => obtenerIP()
+                    ]);
+
+                    $mensaje = 'Actividad actualizada exitosamente';
+                    $tipo_mensaje = 'success';
+                }
+            } else {
+                $mensaje = 'Actividad no encontrada o sin permisos';
+                $tipo_mensaje = 'error';
+            }
+        }
+
+        elseif ($action === 'eliminar') {
+            $id = sanitizarString($_POST['id'] ?? '', ['max_length' => 50]);
+
+            // Prevenir path traversal
+            if (preg_match('/[\.\/\\\\]/', $id)) {
+                registrarEventoSeguridad('Intento de path traversal en eliminar actividad', [
+                    'actividad_id' => $id,
+                    'profesor_rut' => $rut,
+                    'ip' => obtenerIP()
+                ]);
+                $mensaje = 'ID de actividad inválido';
+                $tipo_mensaje = 'error';
+            } elseif (isset($actividades[$id]) && $actividades[$id]['profesor_rut'] === $rut) {
+                $nombre_actividad = $actividades[$id]['info_basica']['nombre'];
+
+                unset($actividades[$id]);
+                guardarJSON(ACTIVIDADES_FILE, $actividades);
+
+                // Reducir cuota usada
+                $profesores[$rut]['actividades_usadas']--;
+                guardarJSON(PROFESORES_FILE, $profesores);
+
+                // Logging
+                registrarLog('INFO', 'Actividad eliminada', [
+                    'actividad_id' => $id,
+                    'profesor_rut' => $rut,
+                    'nombre' => $nombre_actividad,
+                    'ip' => obtenerIP()
+                ]);
+
+                $mensaje = 'Actividad eliminada exitosamente';
+                $tipo_mensaje = 'success';
+            } else {
+                $mensaje = 'Actividad no encontrada o sin permisos';
+                $tipo_mensaje = 'error';
+            }
         }
     }
 }
@@ -592,6 +705,7 @@ No tienes actividades creadas. Crea tu primera actividad usando el botón superi
 👥 Estudiantes
 </a>
 <form method="POST" style="display: inline;" onsubmit="return confirm('¿Eliminar esta actividad?')">
+<input type="hidden" name="csrf_token" value="<?= generarTokenCSRF() ?>">
 <input type="hidden" name="action" value="eliminar">
 <input type="hidden" name="id" value="<?= $id ?>">
 <button type="submit" class="btn btn-danger btn-small">🗑️ Eliminar</button>
@@ -625,6 +739,7 @@ No tienes actividades creadas. Crea tu primera actividad usando el botón superi
 </div>
 
 <form method="POST" id="formActividad">
+<input type="hidden" name="csrf_token" value="<?= generarTokenCSRF() ?>">
 <input type="hidden" name="action" id="form-action" value="crear">
 <input type="hidden" name="id" id="form-id">
 

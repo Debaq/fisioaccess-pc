@@ -8,21 +8,36 @@
 
 require_once '../config.php';
 
-header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, OPTIONS');
+// Configurar CORS de forma segura
+configurarCORS();
 
+// Manejar preflight OPTIONS
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
 
+header('Content-Type: application/json; charset=utf-8');
+
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     responderJSON(['error' => 'Método no permitido'], 405);
 }
 
+// Rate limiting por IP (20 intentos/hora para generación de IDs)
+$ip = obtenerIP();
+if (!verificarRateLimit('generar_id_ip', $ip, 20, 3600)) {
+    registrarEventoSeguridad('Rate limit excedido en generar_id', ['ip' => $ip]);
+    responderJSON([
+        'success' => false,
+        'error' => 'Demasiadas solicitudes. Intenta nuevamente más tarde.'
+    ], 429);
+}
+
+registrarIntento('generar_id_ip', $ip);
+
 try {
-    $tipo = $_GET['tipo'] ?? 'entrega';
+    // Sanitizar tipo
+    $tipo = sanitizarString($_GET['tipo'] ?? 'entrega', ['max_length' => 20]);
     
     $prefijos = [
         'entrega' => 'ENT',
@@ -38,17 +53,25 @@ try {
     }
     
     $id = generarID($prefijos[$tipo]);
-    
+
     // Guardar en reservas (opcional, para tracking)
     $reservas = cargarJSON(RESERVAS_FILE);
     $reservas[$id] = [
         'id' => $id,
         'tipo' => $tipo,
         'generado' => formatearFecha(),
-        'usado' => false
+        'usado' => false,
+        'ip' => $ip
     ];
     guardarJSON(RESERVAS_FILE, $reservas);
-    
+
+    // Logging
+    registrarLog('INFO', 'ID generado', [
+        'id' => $id,
+        'tipo' => $tipo,
+        'ip' => $ip
+    ]);
+
     responderJSON([
         'success' => true,
         'data' => [

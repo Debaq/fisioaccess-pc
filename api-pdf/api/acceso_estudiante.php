@@ -12,16 +12,16 @@
 
 require_once '../config.php';
 
-header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+// Configurar CORS de forma segura
+configurarCORS();
 
 // Manejar preflight OPTIONS
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
+
+header('Content-Type: application/json; charset=utf-8');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     responderJSON([
@@ -44,13 +44,38 @@ try {
         ], 400);
     }
 
-    // Validar formato de email
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    // Validar formato de email usando función centralizada
+    $validacion_email = validarEmail($email);
+    if (!$validacion_email['valido']) {
         responderJSON([
             'success' => false,
-            'error' => 'Formato de email inválido'
+            'error' => $validacion_email['error']
         ], 400);
     }
+    $email = $validacion_email['email'];
+
+    // RATE LIMITING: Verificar límite por IP y por email
+    $ip = obtenerIP();
+
+    if (!verificarRateLimit('ip', $ip)) {
+        registrarEventoSeguridad('Rate limit IP excedido en acceso_estudiante', ['ip' => $ip, 'email' => $email]);
+        responderJSON([
+            'success' => false,
+            'error' => 'Demasiados intentos desde tu IP. Intenta nuevamente en 1 hora.'
+        ], 429);
+    }
+
+    if (!verificarRateLimit('email', $email)) {
+        registrarEventoSeguridad('Rate limit email excedido en acceso_estudiante', ['ip' => $ip, 'email' => $email]);
+        responderJSON([
+            'success' => false,
+            'error' => 'Demasiados intentos con este email. Intenta nuevamente en 1 hora.'
+        ], 429);
+    }
+
+    // Registrar intento
+    registrarIntento('ip', $ip);
+    registrarIntento('email', $email);
 
     // Buscar actividad por token
     $actividades = cargarJSON(ACTIVIDADES_FILE);
@@ -199,11 +224,15 @@ try {
     $email_enviado = enviarEmail($email, $asunto, $mensaje);
 
     if (!$email_enviado) {
+        registrarLog('ERROR', 'Fallo al enviar código de verificación', ['email' => $email, 'actividad_id' => $actividad_id]);
         responderJSON([
             'success' => false,
             'error' => 'Error al enviar el email. Intenta nuevamente.'
         ], 500);
     }
+
+    // Registrar evento exitoso
+    registrarLog('INFO', 'Código de verificación enviado', ['email' => $email, 'actividad_id' => $actividad_id]);
 
     responderJSON([
         'success' => true,

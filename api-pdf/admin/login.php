@@ -16,39 +16,63 @@ if (verificarRol('admin')) {
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = trim($_POST['username'] ?? '');
-    $password = $_POST['password'] ?? '';
-    
-    if (empty($username) || empty($password)) {
-        $error = 'Por favor complete todos los campos';
+    // Validar token CSRF
+    $csrf_token = $_POST['csrf_token'] ?? '';
+    if (!validarTokenCSRF($csrf_token)) {
+        $error = 'Token de seguridad inválido. Recarga la página e intenta nuevamente.';
+        registrarEventoSeguridad('CSRF token inválido en login admin', ['ip' => obtenerIP()]);
     } else {
-        $admins = cargarJSON(ADMINS_FILE);
-        
-        if (isset($admins[$username])) {
-            $admin = $admins[$username];
-            
-            if (password_verify($password, $admin['password_hash'])) {
-                // Login exitoso
-                $_SESSION['authenticated'] = true;
-                $_SESSION['rol'] = 'admin';
-                $_SESSION['username'] = $username;
-                $_SESSION['nombre'] = $admin['nombre'];
-                $_SESSION['login_time'] = time();
-                
-                // Actualizar último login
-                $admins[$username]['last_login'] = formatearFecha();
-                guardarJSON(ADMINS_FILE, $admins);
-                
-                header('Location: dashboard.php');
-                exit;
-            } else {
-                $error = 'Contraseña incorrecta';
-            }
+        $username = trim($_POST['username'] ?? '');
+        $password = $_POST['password'] ?? '';
+
+        // Rate limiting por IP
+        $ip = obtenerIP();
+        if (!verificarRateLimit('login', $ip)) {
+            $error = 'Demasiados intentos de login. Intenta nuevamente en 1 hora.';
+            registrarEventoSeguridad('Rate limit login admin excedido', ['ip' => $ip, 'username' => $username]);
+        } elseif (empty($username) || empty($password)) {
+            $error = 'Por favor complete todos los campos';
         } else {
-            $error = 'Usuario no encontrado';
+            $admins = cargarJSON(ADMINS_FILE);
+
+            if (isset($admins[$username])) {
+                $admin = $admins[$username];
+
+                if (password_verify($password, $admin['password_hash'])) {
+                    // Login exitoso - regenerar sesión para prevenir session fixation
+                    session_regenerate_id(true);
+                    $_SESSION['authenticated'] = true;
+                    $_SESSION['rol'] = 'admin';
+                    $_SESSION['username'] = $username;
+                    $_SESSION['nombre'] = $admin['nombre'];
+                    $_SESSION['login_time'] = time();
+
+                    // Actualizar último login
+                    $admins[$username]['last_login'] = formatearFecha();
+                    guardarJSON(ADMINS_FILE, $admins);
+
+                    // Registrar login exitoso y resetear contador
+                    registrarIntento('login', $ip, true);
+                    registrarEventoSeguridad('Login admin exitoso', ['username' => $username, 'ip' => $ip]);
+
+                    header('Location: dashboard.php');
+                    exit;
+                } else {
+                    $error = 'Contraseña incorrecta';
+                    registrarIntento('login', $ip, false);
+                    registrarEventoSeguridad('Login admin fallido - contraseña incorrecta', ['username' => $username, 'ip' => $ip]);
+                }
+            } else {
+                $error = 'Usuario no encontrado';
+                registrarIntento('login', $ip, false);
+                registrarEventoSeguridad('Login admin fallido - usuario no encontrado', ['username' => $username, 'ip' => $ip]);
+            }
         }
     }
 }
+
+// Generar token CSRF para el formulario
+$csrf_token = generarTokenCSRF();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -192,16 +216,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php endif; ?>
         
         <form method="POST">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
+
             <div class="form-group">
                 <label>Usuario</label>
                 <input type="text" name="username" required autofocus>
             </div>
-            
+
             <div class="form-group">
                 <label>Contraseña</label>
                 <input type="password" name="password" required>
             </div>
-            
+
             <button type="submit" class="btn">Ingresar</button>
         </form>
         

@@ -26,14 +26,58 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-try {
-    $rut = $_SESSION['rut'];
-    $actividad_id = $_POST['actividad_id'] ?? null;
+// Rate limiting por estudiante RUT (5 intentos/hora)
+$rut = $_SESSION['rut'];
+if (!verificarRateLimit('generar_token_estudiante', $rut, 5, 3600)) {
+    registrarEventoSeguridad('Rate limit excedido en generar_token estudiante', [
+        'estudiante_rut' => $rut,
+        'ip' => obtenerIP()
+    ]);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Demasiados intentos. Intenta nuevamente en una hora.'
+    ]);
+    exit;
+}
 
-    if (!$actividad_id) {
+registrarIntento('generar_token_estudiante', $rut);
+
+try {
+    // Validar CSRF token
+    $csrf_token = $_POST['csrf_token'] ?? '';
+    if (!validarTokenCSRF($csrf_token)) {
+        registrarEventoSeguridad('CSRF token inválido en generar_token estudiante', [
+            'estudiante_rut' => $rut,
+            'ip' => obtenerIP()
+        ]);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Token de seguridad inválido'
+        ]);
+        exit;
+    }
+
+    // Sanitizar y validar actividad_id
+    $actividad_id = sanitizarString($_POST['actividad_id'] ?? '', ['max_length' => 50]);
+
+    if (empty($actividad_id)) {
         echo json_encode([
             'success' => false,
             'message' => 'ID de actividad requerido'
+        ]);
+        exit;
+    }
+
+    // Prevenir path traversal
+    if (preg_match('/[\.\/\\\\]/', $actividad_id)) {
+        registrarEventoSeguridad('Path traversal detectado en generar_token estudiante', [
+            'actividad_id' => $actividad_id,
+            'estudiante_rut' => $rut,
+            'ip' => obtenerIP()
+        ]);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Parámetro inválido'
         ]);
         exit;
     }
@@ -85,6 +129,15 @@ try {
     ];
 
     guardarJSON($tokens_file, $tokens);
+
+    // Logging de generación exitosa
+    registrarLog('INFO', 'Token de estudiante generado', [
+        'token' => $token,
+        'estudiante_rut' => $rut,
+        'actividad_id' => $actividad_id,
+        'actividad_nombre' => $actividades[$actividad_id]['info_basica']['nombre'],
+        'ip' => obtenerIP()
+    ]);
 
     echo json_encode([
         'success' => true,

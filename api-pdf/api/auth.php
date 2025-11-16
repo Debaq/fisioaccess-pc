@@ -10,16 +10,16 @@
 
 require_once '../config.php';
 
-header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+// Configurar CORS de forma segura
+configurarCORS();
 
 // Manejar preflight OPTIONS
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
+
+header('Content-Type: application/json; charset=utf-8');
 
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
@@ -94,8 +94,9 @@ function handleLogin() {
         $admins[$username]['last_login'] = formatearFecha();
         guardarJSON(ADMINS_FILE, $admins);
 
-        // Iniciar sesión
+        // Iniciar sesión y regenerar ID por seguridad (prevenir session fixation)
         session_start();
+        session_regenerate_id(true);
         $_SESSION['authenticated'] = true;
         $_SESSION['rol'] = 'admin';
         $_SESSION['username'] = $username;
@@ -149,8 +150,9 @@ function handleLogin() {
         $profesores[$rut]['last_login'] = formatearFecha();
         guardarJSON(PROFESORES_FILE, $profesores);
 
-        // Iniciar sesión
+        // Iniciar sesión y regenerar ID por seguridad (prevenir session fixation)
         session_start();
+        session_regenerate_id(true);
         $_SESSION['authenticated'] = true;
         $_SESSION['rol'] = 'profesor';
         $_SESSION['rut'] = $rut;
@@ -194,8 +196,9 @@ function handleLogin() {
             ], 403);
         }
 
-        // Iniciar sesión
+        // Iniciar sesión y regenerar ID por seguridad (prevenir session fixation)
         session_start();
+        session_regenerate_id(true);
         $_SESSION['authenticated'] = true;
         $_SESSION['rol'] = 'estudiante';
         $_SESSION['rut'] = $rut;

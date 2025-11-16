@@ -7,16 +7,16 @@
 
 require_once '../config.php';
 
-header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+// Configurar CORS de forma segura
+configurarCORS();
 
 // Manejar preflight OPTIONS
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
+
+header('Content-Type: application/json; charset=utf-8');
 
 // Solo permitir POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -35,17 +35,30 @@ try {
         ], 400);
     }
     
-    // Validar metadata
-    $owner = trim($_POST['owner'] ?? '');
-    $type = trim($_POST['type'] ?? '');
-    $comments = trim($_POST['comments'] ?? '');
-    
+    // Rate limiting por IP
+    $ip = obtenerIP();
+    if (!verificarRateLimit('ip', $ip)) {
+        registrarEventoSeguridad('Rate limit excedido en entregas', ['ip' => $ip]);
+        responderJSON([
+            'success' => false,
+            'error' => 'Demasiados intentos. Intenta nuevamente en 1 hora.'
+        ], 429);
+    }
+
+    // Validar y sanitizar metadata
+    $owner = sanitizarString($_POST['owner'] ?? '', ['max_length' => 255]);
+    $type = sanitizarString($_POST['type'] ?? '', ['max_length' => 50]);
+    $comments = sanitizarString($_POST['comments'] ?? '', ['max_length' => 1000]);
+
     if (empty($owner)) {
         responderJSON([
             'success' => false,
             'error' => 'Se requiere información del propietario (owner)'
         ], 400);
     }
+
+    // Registrar intento
+    registrarIntento('ip', $ip);
     
     // Validar archivos subidos
     $pdf = $_FILES['pdf'];
@@ -211,7 +224,15 @@ try {
     ];
     
     guardarJSON(ENTREGAS_FILE, $entregas);
-    
+
+    // Registrar evento
+    registrarLog('INFO', 'Entrega recibida via API', [
+        'entrega_id' => $entrega_id,
+        'actividad_id' => $actividad_id,
+        'estudiante_rut' => $estudiante_rut ?? 'desconocido',
+        'ip' => $ip
+    ]);
+
     // Actualizar estadísticas de actividad si existe
     if ($actividad_id !== 'sin_actividad') {
         $actividades = cargarJSON(ACTIVIDADES_FILE);
