@@ -11,12 +11,14 @@ from utils.GraphHandler import GraphHandler
 from utils.FileHandler import FileHandler
 
 from ui.SaveDialog import SaveDialog
+from ui.LoginDialog import LoginDialog
 from utils.NetworkHandler import NetworkHandler
 from utils.QRGenerator import QRGenerator, QRDisplayDialog
 import os
 from utils.PDFGenerator import PDFGenerator
 from ui.OpenStudyDialog import OpenStudyDialog
 from datetime import datetime
+import sys
 
 
 
@@ -24,19 +26,32 @@ class MainWindow(QMainWindow, Ui_Main):
     def __init__(self):
         super().__init__()
         self.setupUi(self)
-        
+
+        # Variables de autenticación
+        self.student_token = None
+        self.token_data = None
+        self.activity_name = None
+
+        # Mostrar diálogo de login ANTES de continuar
+        if not self.authenticate_user():
+            # Si el usuario cancela el login, cerrar la aplicación
+            sys.exit(0)
+
         # Variables de estado
         self.is_calibrated = False
         self.is_testing = False
         self.test_counter = 0
-        
+
         # Variable para almacenar info de calidad actual
         self.current_quality = None
-        
+
         # Iniciar metodos de guardado
         self.file_handler = FileHandler()
-        
+
         self.network_handler = NetworkHandler()
+        # Configurar el token en el network handler
+        self.network_handler.set_token(self.student_token)
+
         self.qr_generator = QRGenerator()
 
         # Inicializar el manejador serial
@@ -73,6 +88,33 @@ class MainWindow(QMainWindow, Ui_Main):
         # Usar QTimer para ejecutar después de que la ventana esté completamente cargada
         QTimer.singleShot(2000, self.auto_sync_offline_studies)  # 2 segundos de delay
         # =========================================================
+
+    def authenticate_user(self):
+        """
+        Mostrar diálogo de autenticación con token
+
+        Returns:
+            bool: True si la autenticación fue exitosa, False si el usuario canceló
+        """
+        login_dialog = LoginDialog(self)
+
+        # Conectar señal de login exitoso
+        def on_login_success(auth_data):
+            self.student_token = auth_data['token']
+            self.token_data = auth_data['token_data']
+            self.activity_name = self.token_data.get('actividad_nombre', 'Sin actividad')
+
+            # Actualizar título de la ventana con información del estudiante
+            student_name = self.token_data.get('estudiante_nombre', 'Estudiante')
+            self.setWindowTitle(f"FisioaccessPC - {student_name} - {self.activity_name}")
+
+        login_dialog.login_successful.connect(on_login_success)
+
+        # Mostrar el diálogo de forma modal
+        result = login_dialog.exec()
+
+        # Retornar True si el usuario aceptó, False si canceló
+        return result == LoginDialog.Accepted
 
     def connect_signals(self):
         """Conectar todas las señales necesarias"""
@@ -640,9 +682,8 @@ class MainWindow(QMainWindow, Ui_Main):
             self.statusbar.showMessage("No hay grabaciones para guardar")
             return
         
-        # Abrir diálogo para solicitar datos
-        #dialog = SaveDialog(self)
-        dialog = SaveDialog(self, self.current_patient_data)  # Pasar datos
+        # Abrir diálogo para solicitar comentarios (simplificado con token)
+        dialog = SaveDialog(self, self.current_patient_data, self.activity_name)
 
         if dialog.exec() != SaveDialog.Accepted:
             return
