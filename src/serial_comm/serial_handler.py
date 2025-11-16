@@ -6,7 +6,7 @@ import time
 
 
 class SerialReaderThread(QThread):
-    data_received = Signal(str)
+    data_received = Signal(bytes)  # Cambiado de str a bytes
 
     def __init__(self, serial_port, mutex):
         super().__init__()
@@ -17,26 +17,28 @@ class SerialReaderThread(QThread):
 
     def run(self):
         self.is_running = True
-        
+
         while self.is_running and self.serial_port and self.serial_port.is_open:
             try:
                 # Usar un bloqueo con timeout para permitir escrituras
                 self.mutex.lock()
                 if self.serial_port.in_waiting:
-                    data = self.serial_port.readline().decode().strip()
+                    # Leer bytes disponibles (máximo 256 bytes por lectura)
+                    data = self.serial_port.read(min(self.serial_port.in_waiting, 256))
                     if data:
                         self.data_received.emit(data)
                 self.mutex.unlock()
-                
+
                 # Pequeña pausa para no saturar el CPU y dar oportunidad a la escritura
                 self.msleep(1)
-                
+
             except Exception as e:
                 if self.mutex.tryLock():
                     self.mutex.unlock()
                 error_msg = f"Error en thread de lectura: {str(e)}"
                 print(error_msg)
-                self.data_received.emit(error_msg)
+                # Emitir mensaje de error como bytes UTF-8
+                self.data_received.emit(error_msg.encode('utf-8'))
                 break
 
     def stop(self):
@@ -48,7 +50,7 @@ class SerialReaderThread(QThread):
 
 
 class SerialHandler(QObject):
-    data_received_serial = Signal(str)
+    data_received_serial = Signal(bytes)  # Cambiado de str a bytes
     write_status = Signal(str)
     error_occurred = Signal(str)
 
@@ -106,7 +108,7 @@ class SerialHandler(QObject):
                 return "Error: Thread no se inició correctamente"
         return "Thread ya existe"
 
-    @Slot(str)
+    @Slot(bytes)
     def handle_received_data(self, data):
         """Método intermedio para debug de señales"""
         self.data_received_serial.emit(data)

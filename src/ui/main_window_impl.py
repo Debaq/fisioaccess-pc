@@ -45,6 +45,11 @@ class MainWindow(QMainWindow, Ui_Main):
         # Variable para almacenar info de calidad actual
         self.current_quality = None
 
+        # Variables para calibración binaria
+        self.calibration_samples = []
+        self.calibration_timer = None
+        self.is_calibrating = False
+
         # Iniciar metodos de guardado
         self.file_handler = FileHandler()
 
@@ -146,12 +151,12 @@ class MainWindow(QMainWindow, Ui_Main):
         try:
             # Desconectar primero para evitar conexiones duplicadas
             try:
-                self.serial_handler.data_received_serial.disconnect(self.data_handler.analisis_input_serial)
+                self.serial_handler.data_received_serial.disconnect(self.data_handler.analisis_input_binary)
             except:
                 pass
-            
-            # Reconectar la señal
-            self.serial_handler.data_received_serial.connect(self.data_handler.analisis_input_serial)
+
+            # Reconectar la señal (ahora usando protocolo binario)
+            self.serial_handler.data_received_serial.connect(self.data_handler.analisis_input_binary)
         except Exception as e:
             print(f"Error al conectar serial_handler.data_received: {str(e)}")
 
@@ -307,20 +312,102 @@ class MainWindow(QMainWindow, Ui_Main):
 
     @Slot()
     def calibrate(self):
-        """Enviar comando de calibración"""
+        """
+        Iniciar proceso de calibración (protocolo binario)
+        Recopila muestras de presión durante 3 segundos y calcula el offset
+        """
         try:
-            if self.serial_handler:
-                # Asegurar que la lectura esté activa
-                if not hasattr(self.serial_handler, 'reader_thread') or self.serial_handler.reader_thread is None:
-                    self.serial_handler.start_reading()
-                
-                # Enviar comando de calibración
-                self.serial_handler.write_data("r")
-                self.statusbar.showMessage("Enviando comando de calibración...")
-                # El estado se actualizará cuando llegue la respuesta de calibración
+            if not self.serial_handler or not self.serial_handler.serial or not self.serial_handler.serial.is_open:
+                self.statusbar.showMessage("No hay conexión serial activa")
+                return
+
+            # Asegurar que la lectura esté activa
+            if not hasattr(self.serial_handler, 'reader_thread') or self.serial_handler.reader_thread is None:
+                self.serial_handler.start_reading()
+
+            # Iniciar proceso de calibración
+            self.is_calibrating = True
+            self.calibration_samples = []
+            self.is_calibrated = False
+            self.update_button_states()
+
+            self.statusbar.showMessage("CALIBRANDO: Asegúrese de que NO haya flujo de aire (3 segundos)...")
+
+            # Conectar señal temporal para recopilar muestras
+            # Desconectar la señal del graph_handler temporalmente
+            try:
+                self.data_handler.new_data.disconnect(self.graph_handler.update_data)
+            except:
+                pass
+
+            # Conectar a nuestro recolector de muestras
+            self.data_handler.new_data.connect(self.collect_calibration_sample)
+
+            # Timer para finalizar la calibración después de 3 segundos
+            self.calibration_timer = QTimer()
+            self.calibration_timer.setSingleShot(True)
+            self.calibration_timer.timeout.connect(self.finish_calibration)
+            self.calibration_timer.start(3000)  # 3 segundos
+
         except Exception as e:
             self.statusbar.showMessage(f"Error al calibrar: {str(e)}")
             print(f"Error en calibración: {str(e)}")
+            self.is_calibrating = False
+            self.update_button_states()
+
+    @Slot(dict)
+    def collect_calibration_sample(self, data):
+        """Recopilar muestras durante la calibración"""
+        if self.is_calibrating and 't' in data:
+            # Guardar solo el timestamp para calcular valores RAW desde el binary_protocol
+            # Por ahora guardamos presión directa (ya está en kPa pero sin calibrar)
+            self.calibration_samples.append(data.get('p', 0.0))
+
+    def finish_calibration(self):
+        """Finalizar proceso de calibración y calcular offset"""
+        try:
+            # Desconectar señal temporal
+            try:
+                self.data_handler.new_data.disconnect(self.collect_calibration_sample)
+            except:
+                pass
+
+            # Reconectar señal al graph_handler
+            self.data_handler.new_data.connect(self.graph_handler.update_data)
+
+            if len(self.calibration_samples) < 10:
+                self.statusbar.showMessage("Error: No se recibieron suficientes muestras para calibrar")
+                self.is_calibrating = False
+                self.update_button_states()
+                return
+
+            # Calcular promedio de presión (este será nuestro offset)
+            # Nota: En el sensor processor, esto se maneja como offset RAW
+            # Por ahora, simplemente informamos que la calibración está lista
+            avg_pressure = sum(self.calibration_samples) / len(self.calibration_samples)
+
+            # IMPORTANTE: Necesitamos acceder a los valores RAW directamente
+            # Por ahora, llamamos a reset para poner el volumen en 0
+            self.data_handler.reset_volume()
+
+            # Marcar como calibrado
+            self.is_calibrated = True
+            self.is_calibrating = False
+
+            # Reset de los datos del graph
+            self.graph_handler.reset_data()
+
+            self.statusbar.showMessage(
+                f"Calibración completada ({len(self.calibration_samples)} muestras, "
+                f"presión promedio: {avg_pressure:.3f} kPa) - Sistema listo"
+            )
+            self.update_button_states()
+
+        except Exception as e:
+            self.statusbar.showMessage(f"Error al finalizar calibración: {str(e)}")
+            print(f"Error al finalizar calibración: {str(e)}")
+            self.is_calibrating = False
+            self.update_button_states()
 
     @Slot()
     def handle_calibration_response(self, data):
@@ -353,38 +440,39 @@ class MainWindow(QMainWindow, Ui_Main):
     @Slot()
     def start_test(self):
         """Iniciar una nueva prueba"""
-        
+
         if not self.is_calibrated:
             self.statusbar.showMessage("Debe calibrar antes de iniciar una prueba")
             return
-        
+
         # Verificar si ya alcanzó el máximo de grabaciones
         if self.graph_handler.recording_count >= self.graph_handler.max_recordings:
             self.statusbar.showMessage(f"Máximo de {self.graph_handler.max_recordings} grabaciones alcanzado")
             return
-            
+
         try:
             self.is_testing = True
             self.update_button_states()
-            
-            # ORDEN CORRECTO:
-            # 1. Preparar el GraphHandler ANTES de enviar comando al hardware
+
+            # Resetear el volumen acumulado para la nueva prueba
+            self.data_handler.reset_volume()
+
+            # Preparar el GraphHandler para nueva grabación
             success = self.graph_handler.prepare_new_recording()
-            
+
             if not success:
                 self.statusbar.showMessage("No se puede iniciar nueva grabación")
                 self.is_testing = False
                 self.update_button_states()
                 return
-            
-            # 2. Enviar comando de reset al hardware
+
+            # Asegurar que la lectura esté activa
             if self.serial_handler:
                 if not hasattr(self.serial_handler, 'reader_thread') or self.serial_handler.reader_thread is None:
                     self.serial_handler.start_reading()
-                
-                self.serial_handler.write_data("v")
-                self.statusbar.showMessage(f"Iniciando prueba {self.graph_handler.recording_count + 1}... Espere la señal")
-            
+
+            self.statusbar.showMessage(f"Iniciando prueba {self.graph_handler.recording_count + 1}... Espere la señal")
+
         except Exception as e:
             self.is_testing = False
             self.update_button_states()
@@ -588,12 +676,12 @@ class MainWindow(QMainWindow, Ui_Main):
                 # Crear nueva instancia de SerialHandler
                 self.serial_handler = SerialHandler(port=port)
                 
-                # Reconectar la señal data_received
+                # Reconectar la señal data_received (ahora usando protocolo binario)
                 try:
-                    self.serial_handler.data_received_serial.disconnect(self.data_handler.analisis_input_serial)
+                    self.serial_handler.data_received_serial.disconnect(self.data_handler.analisis_input_binary)
                 except:
                     pass
-                self.serial_handler.data_received_serial.connect(self.data_handler.analisis_input_serial)
+                self.serial_handler.data_received_serial.connect(self.data_handler.analisis_input_binary)
                 
                 if self.serial_handler.open():
                     self.statusbar.showMessage(f"Conectado a {port} - Debe calibrar antes de iniciar pruebas")

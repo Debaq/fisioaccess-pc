@@ -1,14 +1,57 @@
 from PySide6.QtCore import QObject, Signal, Slot
+from .binary_protocol import BinaryProtocolDecoder, SensorDataProcessor
 
 class SerialDataHandler(QObject):
     # Señal para nuevos datos procesados
     new_data = Signal(dict)
     # Señal para strings no estándar
     other_string = Signal(str)
-    
+
     def __init__(self):
         super().__init__()
-    
+        # Inicializar decodificador de protocolo binario
+        self.binary_decoder = BinaryProtocolDecoder()
+        self.sensor_processor = SensorDataProcessor()
+
+        # Modo de operación: 'binary' o 'csv' (para compatibilidad)
+        self.mode = 'binary'
+
+    def reset_volume(self):
+        """Reinicia el cálculo de volumen acumulado"""
+        self.sensor_processor.reset_volume()
+
+    def set_pressure_calibration(self, offset_1, offset_2):
+        """Establece los valores de calibración para los sensores de presión"""
+        self.sensor_processor.set_pressure_calibration(offset_1, offset_2)
+
+    @Slot(bytes)
+    def analisis_input_binary(self, data_bytes):
+        """
+        Analizar datos binarios recibidos del puerto serial
+
+        Args:
+            data_bytes (bytes): Datos binarios del protocolo
+        """
+        try:
+            # Agregar datos al buffer del decodificador
+            self.binary_decoder.add_data(data_bytes)
+
+            # Procesar todos los mensajes disponibles
+            messages = self.binary_decoder.process_buffer()
+
+            for message in messages:
+                # Procesar mensaje y convertir a formato t, p, f, v
+                data_dict = self.sensor_processor.process_message(message)
+
+                if data_dict:
+                    # Emitir los datos procesados
+                    self.new_data.emit(data_dict)
+
+        except Exception as e:
+            error_msg = f"Error procesando datos binarios: {str(e)}"
+            print(error_msg)
+            self.other_string.emit(error_msg)
+
     def validate_time(self, time_value):
         """
         Validar el valor del tiempo.
