@@ -51,3 +51,13 @@ ErrorDocument 404 /api-pdf/index.html
     RemoveHandler .php .phtml .php3 .php4 .php5 .phps
     RemoveType .php .phtml .php3 .php4 .php5 .phps
 </Directory>
+
+# Proteger archivos de logs
+<FilesMatch "\.(log)$">
+    Require all denied
+</FilesMatch>
+
+# Proteger archivos JSON de datos sensibles
+<FilesMatch "rate_limits\.json$">
+    Require all denied
+</FilesMatch>

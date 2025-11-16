@@ -84,6 +84,11 @@ define('SESIONES_ESTUDIANTES_FILE', DATA_PATH . '/sesiones_estudiantes.json');
 define('TOKENS_APP_FILE', DATA_PATH . '/tokens_app.json');
 define('CODIGOS_VERIFICACION_FILE', DATA_PATH . '/codigos_verificacion.json');
 
+// Archivos de seguridad y logging
+define('RATE_LIMIT_FILE', DATA_PATH . '/rate_limits.json');
+define('LOG_FILE', DATA_PATH . '/logs/app.log');
+define('SECURITY_LOG_FILE', DATA_PATH . '/logs/security.log');
+
 // Configuración de sesiones
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
@@ -98,6 +103,12 @@ define('TOKEN_APP_TIMEOUT', 14400);
 
 // Timeout de código de verificación (20 minutos)
 define('CODIGO_VERIFICACION_TIMEOUT', 1200);
+
+// Configuración de rate limiting
+define('RATE_LIMIT_WINDOW', 3600); // Ventana de 1 hora
+define('RATE_LIMIT_MAX_ATTEMPTS_IP', 10); // Máximo 10 intentos por IP por hora
+define('RATE_LIMIT_MAX_ATTEMPTS_EMAIL', 5); // Máximo 5 intentos por email por hora
+define('RATE_LIMIT_LOGIN_ATTEMPTS', 5); // Máximo 5 intentos de login fallidos
 
 // Límites de archivos
 define('PDF_MAX_SIZE', 10 * 1024 * 1024); // 10MB
@@ -145,7 +156,28 @@ function guardarJSON($archivo, $datos) {
     if (!is_dir($dir)) {
         mkdir($dir, 0755, true);
     }
-    return file_put_contents($archivo, json_encode($datos, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+
+    // Usar file locking para prevenir race conditions
+    $json = json_encode($datos, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    $fp = fopen($archivo, 'c');
+
+    if ($fp) {
+        if (flock($fp, LOCK_EX)) {
+            ftruncate($fp, 0);
+            fwrite($fp, $json);
+            fflush($fp);
+            flock($fp, LOCK_UN);
+            fclose($fp);
+            return true;
+        } else {
+            fclose($fp);
+            registrarLog('ERROR', "No se pudo obtener lock para: $archivo");
+            return false;
+        }
+    }
+
+    registrarLog('ERROR', "No se pudo abrir archivo: $archivo");
+    return false;
 }
 
 /**
@@ -378,17 +410,357 @@ function limpiarTokensExpirados() {
     $tokens = cargarJSON(TOKENS_APP_FILE);
     $tiempo_actual = time();
     $tokens_validos = [];
-    
+
     foreach ($tokens as $token => $data) {
         if ($tiempo_actual - $data['timestamp'] < TOKEN_APP_TIMEOUT) {
             $tokens_validos[$token] = $data;
         }
     }
-    
+
     if (count($tokens_validos) !== count($tokens)) {
         guardarJSON(TOKENS_APP_FILE, $tokens_validos);
     }
-    
+
     return $tokens_validos;
+}
+
+// ============================================================================
+// SISTEMA DE LOGGING
+// ============================================================================
+
+/**
+ * Registrar evento en log
+ * @param string $nivel Nivel: INFO, WARNING, ERROR, SECURITY
+ * @param string $mensaje Mensaje a registrar
+ * @param array $contexto Contexto adicional (opcional)
+ */
+function registrarLog($nivel, $mensaje, $contexto = []) {
+    $archivo_log = ($nivel === 'SECURITY') ? SECURITY_LOG_FILE : LOG_FILE;
+
+    $dir = dirname($archivo_log);
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+
+    $timestamp = date('Y-m-d H:i:s');
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? 'unknown';
+    $uri = $_SERVER['REQUEST_URI'] ?? '';
+
+    $contexto_json = !empty($contexto) ? json_encode($contexto, JSON_UNESCAPED_UNICODE) : '';
+
+    $linea = sprintf(
+        "[%s] [%s] [IP: %s] %s %s %s\n",
+        $timestamp,
+        $nivel,
+        $ip,
+        $mensaje,
+        $uri,
+        $contexto_json
+    );
+
+    // Escribir en archivo con lock
+    $fp = fopen($archivo_log, 'a');
+    if ($fp) {
+        if (flock($fp, LOCK_EX)) {
+            fwrite($fp, $linea);
+            flock($fp, LOCK_UN);
+        }
+        fclose($fp);
+    }
+
+    // También registrar en error_log de PHP para errores críticos
+    if (in_array($nivel, ['ERROR', 'SECURITY'])) {
+        error_log($mensaje);
+    }
+}
+
+/**
+ * Registrar evento de seguridad
+ */
+function registrarEventoSeguridad($evento, $detalles = []) {
+    registrarLog('SECURITY', $evento, $detalles);
+}
+
+// ============================================================================
+// RATE LIMITING
+// ============================================================================
+
+/**
+ * Verificar rate limit por clave (IP, email, etc.)
+ * @param string $tipo Tipo de limite: 'ip', 'email', 'login'
+ * @param string $clave Identificador (IP, email, username)
+ * @param int $max_intentos Máximo de intentos permitidos
+ * @return bool true si está dentro del límite, false si excedió
+ */
+function verificarRateLimit($tipo, $clave, $max_intentos = null) {
+    // Determinar máximo según tipo
+    if ($max_intentos === null) {
+        switch ($tipo) {
+            case 'ip':
+                $max_intentos = RATE_LIMIT_MAX_ATTEMPTS_IP;
+                break;
+            case 'email':
+                $max_intentos = RATE_LIMIT_MAX_ATTEMPTS_EMAIL;
+                break;
+            case 'login':
+                $max_intentos = RATE_LIMIT_LOGIN_ATTEMPTS;
+                break;
+            default:
+                $max_intentos = 10;
+        }
+    }
+
+    $rate_limits = cargarJSON(RATE_LIMIT_FILE);
+    $tiempo_actual = time();
+    $key = $tipo . ':' . $clave;
+
+    // Limpiar entradas expiradas
+    foreach ($rate_limits as $k => $data) {
+        if ($tiempo_actual - $data['first_attempt'] > RATE_LIMIT_WINDOW) {
+            unset($rate_limits[$k]);
+        }
+    }
+
+    // Verificar si existe y si está bloqueado
+    if (isset($rate_limits[$key])) {
+        $data = $rate_limits[$key];
+
+        // Si está fuera de la ventana, resetear
+        if ($tiempo_actual - $data['first_attempt'] > RATE_LIMIT_WINDOW) {
+            unset($rate_limits[$key]);
+            guardarJSON(RATE_LIMIT_FILE, $rate_limits);
+            return true;
+        }
+
+        // Verificar si excedió el límite
+        if ($data['attempts'] >= $max_intentos) {
+            $tiempo_restante = RATE_LIMIT_WINDOW - ($tiempo_actual - $data['first_attempt']);
+            registrarEventoSeguridad("Rate limit excedido: $tipo - $clave", [
+                'attempts' => $data['attempts'],
+                'tiempo_restante' => $tiempo_restante
+            ]);
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Registrar intento (incrementar contador de rate limit)
+ */
+function registrarIntento($tipo, $clave, $exitoso = false) {
+    $rate_limits = cargarJSON(RATE_LIMIT_FILE);
+    $tiempo_actual = time();
+    $key = $tipo . ':' . $clave;
+
+    if (!isset($rate_limits[$key])) {
+        $rate_limits[$key] = [
+            'first_attempt' => $tiempo_actual,
+            'attempts' => 1,
+            'last_attempt' => $tiempo_actual,
+            'exitoso' => $exitoso
+        ];
+    } else {
+        // Si la ventana expiró, resetear
+        if ($tiempo_actual - $rate_limits[$key]['first_attempt'] > RATE_LIMIT_WINDOW) {
+            $rate_limits[$key] = [
+                'first_attempt' => $tiempo_actual,
+                'attempts' => 1,
+                'last_attempt' => $tiempo_actual,
+                'exitoso' => $exitoso
+            ];
+        } else {
+            // Incrementar
+            $rate_limits[$key]['attempts']++;
+            $rate_limits[$key]['last_attempt'] = $tiempo_actual;
+            $rate_limits[$key]['exitoso'] = $exitoso;
+        }
+    }
+
+    // Si fue exitoso, resetear contador (solo para login)
+    if ($exitoso && $tipo === 'login') {
+        unset($rate_limits[$key]);
+    }
+
+    guardarJSON(RATE_LIMIT_FILE, $rate_limits);
+}
+
+/**
+ * Limpiar rate limits expirados
+ */
+function limpiarRateLimits() {
+    $rate_limits = cargarJSON(RATE_LIMIT_FILE);
+    $tiempo_actual = time();
+    $limpios = [];
+
+    foreach ($rate_limits as $key => $data) {
+        if ($tiempo_actual - $data['first_attempt'] <= RATE_LIMIT_WINDOW) {
+            $limpios[$key] = $data;
+        }
+    }
+
+    if (count($limpios) !== count($rate_limits)) {
+        guardarJSON(RATE_LIMIT_FILE, $limpios);
+    }
+}
+
+// ============================================================================
+// VALIDACIONES CENTRALIZADAS
+// ============================================================================
+
+/**
+ * Validar RUT chileno
+ */
+function validarRUT($rut) {
+    // Limpiar RUT
+    $rut = preg_replace('/[^0-9kK]/', '', strtoupper($rut));
+
+    if (strlen($rut) < 2) {
+        return false;
+    }
+
+    $dv = substr($rut, -1);
+    $numero = substr($rut, 0, -1);
+
+    // Calcular dígito verificador
+    $suma = 0;
+    $multiplo = 2;
+
+    for ($i = strlen($numero) - 1; $i >= 0; $i--) {
+        $suma += $numero[$i] * $multiplo;
+        $multiplo = ($multiplo < 7) ? $multiplo + 1 : 2;
+    }
+
+    $resto = $suma % 11;
+    $dv_calculado = 11 - $resto;
+
+    if ($dv_calculado == 11) $dv_calculado = '0';
+    if ($dv_calculado == 10) $dv_calculado = 'K';
+
+    return (string)$dv_calculado === (string)$dv;
+}
+
+/**
+ * Validar email con opciones adicionales
+ */
+function validarEmail($email, $opciones = []) {
+    // Validación básica
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return [
+            'valido' => false,
+            'error' => 'Formato de email inválido'
+        ];
+    }
+
+    // Validar dominio si se especifica
+    if (isset($opciones['dominio_requerido'])) {
+        $dominio = substr(strrchr($email, "@"), 1);
+        if (strtolower($dominio) !== strtolower($opciones['dominio_requerido'])) {
+            return [
+                'valido' => false,
+                'error' => 'El email debe ser del dominio ' . $opciones['dominio_requerido']
+            ];
+        }
+    }
+
+    // Validar que no esté en lista negra (opcional)
+    if (isset($opciones['blacklist']) && in_array(strtolower($email), $opciones['blacklist'])) {
+        return [
+            'valido' => false,
+            'error' => 'Email no permitido'
+        ];
+    }
+
+    return [
+        'valido' => true,
+        'email' => strtolower($email)
+    ];
+}
+
+/**
+ * Sanitizar string para prevenir XSS
+ */
+function sanitizarString($string, $opciones = []) {
+    // Opciones por defecto
+    $defaults = [
+        'trim' => true,
+        'strip_tags' => true,
+        'htmlspecialchars' => false,
+        'max_length' => null
+    ];
+
+    $opts = array_merge($defaults, $opciones);
+
+    if ($opts['trim']) {
+        $string = trim($string);
+    }
+
+    if ($opts['strip_tags']) {
+        $string = strip_tags($string);
+    }
+
+    if ($opts['htmlspecialchars']) {
+        $string = htmlspecialchars($string, ENT_QUOTES, 'UTF-8');
+    }
+
+    if ($opts['max_length'] !== null && strlen($string) > $opts['max_length']) {
+        $string = substr($string, 0, $opts['max_length']);
+    }
+
+    return $string;
+}
+
+/**
+ * Validar que un string no esté vacío
+ */
+function validarNoVacio($valor, $nombre_campo = 'Campo') {
+    if (empty(trim($valor))) {
+        return [
+            'valido' => false,
+            'error' => "$nombre_campo es requerido"
+        ];
+    }
+
+    return ['valido' => true, 'valor' => trim($valor)];
+}
+
+/**
+ * Validar longitud de string
+ */
+function validarLongitud($string, $min = null, $max = null, $nombre_campo = 'Campo') {
+    $longitud = strlen($string);
+
+    if ($min !== null && $longitud < $min) {
+        return [
+            'valido' => false,
+            'error' => "$nombre_campo debe tener al menos $min caracteres"
+        ];
+    }
+
+    if ($max !== null && $longitud > $max) {
+        return [
+            'valido' => false,
+            'error' => "$nombre_campo no puede exceder $max caracteres"
+        ];
+    }
+
+    return ['valido' => true];
+}
+
+/**
+ * Obtener IP del cliente (considerando proxies)
+ */
+function obtenerIP() {
+    if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
+        $ip = $_SERVER['HTTP_CLIENT_IP'];
+    } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        $ip = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0];
+    } else {
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    }
+
+    return filter_var($ip, FILTER_VALIDATE_IP) ? $ip : '0.0.0.0';
 }
 ?>

@@ -20,11 +20,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $csrf_token = $_POST['csrf_token'] ?? '';
     if (!validarTokenCSRF($csrf_token)) {
         $error = 'Token de seguridad inválido. Recarga la página e intenta nuevamente.';
+        registrarEventoSeguridad('CSRF token inválido en login admin', ['ip' => obtenerIP()]);
     } else {
         $username = trim($_POST['username'] ?? '');
         $password = $_POST['password'] ?? '';
 
-        if (empty($username) || empty($password)) {
+        // Rate limiting por IP
+        $ip = obtenerIP();
+        if (!verificarRateLimit('login', $ip)) {
+            $error = 'Demasiados intentos de login. Intenta nuevamente en 1 hora.';
+            registrarEventoSeguridad('Rate limit login admin excedido', ['ip' => $ip, 'username' => $username]);
+        } elseif (empty($username) || empty($password)) {
             $error = 'Por favor complete todos los campos';
         } else {
             $admins = cargarJSON(ADMINS_FILE);
@@ -45,13 +51,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $admins[$username]['last_login'] = formatearFecha();
                     guardarJSON(ADMINS_FILE, $admins);
 
+                    // Registrar login exitoso y resetear contador
+                    registrarIntento('login', $ip, true);
+                    registrarEventoSeguridad('Login admin exitoso', ['username' => $username, 'ip' => $ip]);
+
                     header('Location: dashboard.php');
                     exit;
                 } else {
                     $error = 'Contraseña incorrecta';
+                    registrarIntento('login', $ip, false);
+                    registrarEventoSeguridad('Login admin fallido - contraseña incorrecta', ['username' => $username, 'ip' => $ip]);
                 }
             } else {
                 $error = 'Usuario no encontrado';
+                registrarIntento('login', $ip, false);
+                registrarEventoSeguridad('Login admin fallido - usuario no encontrado', ['username' => $username, 'ip' => $ip]);
             }
         }
     }

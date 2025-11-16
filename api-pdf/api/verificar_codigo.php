@@ -147,6 +147,14 @@ try {
     $_SESSION['nombre'] = $estudiante['nombre'];
     $_SESSION['login_time'] = time();
 
+    // Registrar acceso exitoso
+    registrarEventoSeguridad('Estudiante verificado y autenticado', [
+        'email' => $email,
+        'rut' => $rut_estudiante,
+        'actividad_id' => $actividad_id,
+        'ip' => obtenerIP()
+    ]);
+
     // Crear sesión de estudiante para el sistema
     $sesiones = cargarJSON(SESIONES_ESTUDIANTES_FILE);
     $session_id = session_id();
