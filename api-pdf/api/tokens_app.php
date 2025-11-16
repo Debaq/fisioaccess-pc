@@ -11,10 +11,8 @@
 
 require_once '../config.php';
 
-header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+// Configurar CORS de forma segura
+configurarCORS();
 
 // Manejar preflight OPTIONS
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -22,12 +20,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+header('Content-Type: application/json; charset=utf-8');
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     responderJSON([
         'success' => false,
         'error' => 'Método no permitido'
     ], 405);
 }
+
+// Rate limiting por IP (10 intentos/hora)
+$ip = obtenerIP();
+if (!verificarRateLimit('tokens_app_ip', $ip, 10, 3600)) {
+    registrarEventoSeguridad('Rate limit excedido en tokens_app', ['ip' => $ip]);
+    responderJSON([
+        'success' => false,
+        'error' => 'Demasiados intentos. Intenta nuevamente más tarde.'
+    ], 429);
+}
+
+registrarIntento('tokens_app_ip', $ip);
 
 $action = $_GET['action'] ?? '';
 
@@ -54,8 +66,10 @@ try {
  */
 function handleGenerar() {
     $input = json_decode(file_get_contents('php://input'), true);
-    $session_id = trim($input['session_id'] ?? '');
-    
+
+    // Sanitizar session_id
+    $session_id = sanitizarString($input['session_id'] ?? '', ['max_length' => 100]);
+
     if (empty($session_id)) {
         responderJSON([
             'success' => false,
@@ -65,21 +79,31 @@ function handleGenerar() {
     
     // Verificar sesión
     $sesiones = cargarJSON(SESIONES_ESTUDIANTES_FILE);
-    
+
     if (!isset($sesiones[$session_id])) {
+        registrarEventoSeguridad('Intento de generar token con sesión inexistente', [
+            'session_id' => $session_id,
+            'ip' => obtenerIP()
+        ]);
         responderJSON([
             'success' => false,
             'error' => 'Sesión no encontrada o expirada'
         ], 404);
     }
-    
+
     $sesion = $sesiones[$session_id];
-    
+
     // Verificar que la sesión no haya expirado (2 horas)
     if (time() - $sesion['timestamp'] > SESSION_TIMEOUT) {
         unset($sesiones[$session_id]);
         guardarJSON(SESIONES_ESTUDIANTES_FILE, $sesiones);
-        
+
+        registrarEventoSeguridad('Intento de generar token con sesión expirada', [
+            'session_id' => $session_id,
+            'email' => $sesion['email'] ?? 'unknown',
+            'ip' => obtenerIP()
+        ]);
+
         responderJSON([
             'success' => false,
             'error' => 'Sesión expirada. Inicia sesión nuevamente.'
@@ -109,11 +133,19 @@ function handleGenerar() {
     $sesiones[$session_id]['token_app_generado'] = true;
     $sesiones[$session_id]['ultimo_token'] = $token;
     guardarJSON(SESIONES_ESTUDIANTES_FILE, $sesiones);
-    
+
+    // Logging de generación exitosa
+    registrarLog('INFO', 'Token de app generado', [
+        'token' => $token,
+        'email' => $sesion['email'],
+        'actividad_id' => $sesion['actividad_id'],
+        'ip' => obtenerIP()
+    ]);
+
     // Obtener info de la actividad
     $actividades = cargarJSON(ACTIVIDADES_FILE);
     $actividad = $actividades[$sesion['actividad_id']] ?? null;
-    
+
     responderJSON([
         'success' => true,
         'message' => 'Token generado exitosamente',
@@ -134,22 +166,28 @@ function handleGenerar() {
  */
 function handleValidar() {
     $input = json_decode(file_get_contents('php://input'), true);
-    $token = trim($input['token'] ?? '');
-    
+
+    // Sanitizar token
+    $token = sanitizarString($input['token'] ?? '', ['max_length' => 50]);
+
     if (empty($token)) {
         responderJSON([
             'success' => false,
             'error' => 'Token es requerido'
         ], 400);
     }
-    
+
     // Limpiar tokens expirados
     limpiarTokensExpirados();
-    
+
     // Verificar token
     $tokens = cargarJSON(TOKENS_APP_FILE);
-    
+
     if (!isset($tokens[$token])) {
+        registrarEventoSeguridad('Intento de validar token inválido', [
+            'token' => $token,
+            'ip' => obtenerIP()
+        ]);
         responderJSON([
             'success' => false,
             'error' => 'Token inválido o expirado'
@@ -186,7 +224,15 @@ function handleValidar() {
     
     // Obtener cuotas disponibles
     $cuotas = $actividad['configuracion']['cuota_estudios'];
-    
+
+    // Logging de validación exitosa
+    registrarLog('INFO', 'Token de app validado', [
+        'token' => $token,
+        'email' => $token_data['email'],
+        'actividad_id' => $token_data['actividad_id'],
+        'ip' => obtenerIP()
+    ]);
+
     responderJSON([
         'success' => true,
         'message' => 'Token válido',

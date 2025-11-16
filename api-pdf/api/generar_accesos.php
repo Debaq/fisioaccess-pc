@@ -8,12 +8,8 @@
 
 require_once '../config.php';
 
-session_start();
-
-header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+// Configurar CORS de forma segura
+configurarCORS();
 
 // Manejar preflight OPTIONS
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -21,8 +17,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+session_start();
+
+header('Content-Type: application/json; charset=utf-8');
+
 // Verificar autenticación de profesor
 if (!verificarRol('profesor')) {
+    registrarEventoSeguridad('Intento de acceso no autorizado a generar_accesos', [
+        'ip' => obtenerIP()
+    ]);
     responderJSON([
         'success' => false,
         'error' => 'No autorizado. Debes ser profesor.'
@@ -30,12 +33,27 @@ if (!verificarRol('profesor')) {
 }
 
 $rut = $_SESSION['rut'];
-$actividad_id = $_GET['actividad_id'] ?? $_POST['actividad_id'] ?? '';
+
+// Sanitizar y validar actividad_id
+$actividad_id = sanitizarString($_GET['actividad_id'] ?? $_POST['actividad_id'] ?? '', ['max_length' => 50]);
 
 if (empty($actividad_id)) {
     responderJSON([
         'success' => false,
         'error' => 'actividad_id es requerido'
+    ], 400);
+}
+
+// Prevenir path traversal
+if (preg_match('/[\.\/\\\\]/', $actividad_id)) {
+    registrarEventoSeguridad('Intento de path traversal en generar_accesos', [
+        'actividad_id' => $actividad_id,
+        'profesor_rut' => $rut,
+        'ip' => obtenerIP()
+    ]);
+    responderJSON([
+        'success' => false,
+        'error' => 'Parámetro inválido'
     ], 400);
 }
 
@@ -63,15 +81,22 @@ try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'regenerar') {
         $nuevo_token = generarToken(12);
         $actividades[$actividad_id]['accesos']['token_actividad'] = $nuevo_token;
-        
+
         // Regenerar URLs
         $url_base = $actividades[$actividad_id]['accesos']['url_base'];
         $actividades[$actividad_id]['accesos']['link_directo'] = $url_base . '/estudiante/acceso.php?token=' . $nuevo_token;
         $actividades[$actividad_id]['accesos']['html_embed'] = generarHTMLEmbebido($actividades[$actividad_id]);
         $actividades[$actividad_id]['accesos']['fecha_generacion'] = formatearFecha();
-        
+
         guardarJSON(ACTIVIDADES_FILE, $actividades);
-        
+
+        // Logging de regeneración
+        registrarLog('INFO', 'Token de acceso regenerado', [
+            'actividad_id' => $actividad_id,
+            'profesor_rut' => $rut,
+            'ip' => obtenerIP()
+        ]);
+
         $actividad = $actividades[$actividad_id];
     }
     
